@@ -1,0 +1,10 @@
+project_id = "lwkgsjdpzxcbajbfprvy"
+
+[functions.process-queue]
+verify_jwt = false
+
+[functions.track-open]
+verify_jwt = false
+
+[functions.track-click]
+verify_jwt = false
