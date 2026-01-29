@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
+import { SESClient, SendEmailCommand } from 'https://esm.sh/@aws-sdk/client-ses@3.712.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,10 +28,23 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const masterSmtpKey = Deno.env.get('MASTER_SMTP_KEY')
-    const smtpHost = Deno.env.get('SMTP_HOST')
-    const smtpPort = Deno.env.get('SMTP_PORT')
-    const smtpUser = Deno.env.get('SMTP_USER')
+    
+    // AWS SES Configuration
+    const awsAccessKeyId = Deno.env.get('AWS_ACCESS_KEY_ID')
+    const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY')
+    const awsRegion = Deno.env.get('AWS_SES_REGION') || 'us-east-1'
+
+    if (!awsAccessKeyId || !awsSecretAccessKey) {
+      throw new Error('AWS credentials not configured')
+    }
+
+    const sesClient = new SESClient({
+      region: awsRegion,
+      credentials: {
+        accessKeyId: awsAccessKeyId,
+        secretAccessKey: awsSecretAccessKey,
+      },
+    })
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -59,25 +73,43 @@ Deno.serve(async (req) => {
     // Process each email
     for (const email of pendingEmails as QueueItem[]) {
       try {
-        // Build email with tracking pixel and List-Unsubscribe header
+        // Build email with tracking pixel
         const trackingPixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${email.id}`
         const bodyWithTracking = email.body + `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />`
 
-        // Note: Actual email sending implementation depends on provider
-        // This is a placeholder for when SMTP credentials are configured
-        if (masterSmtpKey && smtpHost) {
-          // Email would be sent here using the configured SMTP provider
-          // Example headers:
-          // - List-Unsubscribe: <mailto:unsubscribe@domain.com>
-          // - From: email.from_email
-          // - To: email.to_email
-          // - Subject: email.subject
-          // - HTML Body: bodyWithTracking
-          
-          console.log(`Would send email to ${email.to_email} from ${email.from_email}`)
-        }
+        // Rewrite links for click tracking
+        const bodyWithClickTracking = rewriteLinksForTracking(bodyWithTracking, email.id, supabaseUrl)
 
-        // For now, mark as sent (in production, this happens after actual send)
+        // Send email via AWS SES
+        const sendCommand = new SendEmailCommand({
+          Source: email.from_email,
+          Destination: {
+            ToAddresses: [email.to_email],
+          },
+          Message: {
+            Subject: {
+              Data: email.subject,
+              Charset: 'UTF-8',
+            },
+            Body: {
+              Html: {
+                Data: bodyWithClickTracking,
+                Charset: 'UTF-8',
+              },
+            },
+          },
+          // List-Unsubscribe header for compliance
+          Tags: [
+            {
+              Name: 'campaign_id',
+              Value: email.campaign_id,
+            },
+          ],
+        })
+
+        await sesClient.send(sendCommand)
+
+        // Mark as sent
         const { error: updateError } = await supabase
           .from('email_queue')
           .update({
@@ -92,8 +124,10 @@ Deno.serve(async (req) => {
         }
 
         successCount++
+        console.log(`Email sent successfully to ${email.to_email}`)
       } catch (emailError: any) {
         errorCount++
+        console.error(`Failed to send email to ${email.to_email}:`, emailError.message)
         
         // Update as failed
         await supabase
@@ -146,3 +180,19 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// Helper function to rewrite links for click tracking
+function rewriteLinksForTracking(html: string, emailQueueId: string, supabaseUrl: string): string {
+  // Match href attributes in anchor tags
+  const linkRegex = /<a\s+([^>]*href=["'])([^"']+)(["'][^>]*)>/gi
+  
+  return html.replace(linkRegex, (match, before, url, after) => {
+    // Skip tracking pixel and mailto links
+    if (url.includes('track-open') || url.includes('track-click') || url.startsWith('mailto:')) {
+      return match
+    }
+    
+    const trackingUrl = `${supabaseUrl}/functions/v1/track-click?id=${emailQueueId}&url=${encodeURIComponent(url)}`
+    return `<a ${before}${trackingUrl}${after}>`
+  })
+}
