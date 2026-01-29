@@ -25,7 +25,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface SenderIdentity {
   id: string;
@@ -42,6 +43,7 @@ export default function SenderIdentities() {
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [selectedIdentity, setSelectedIdentity] = useState<SenderIdentity | null>(null);
 
   // Form state
@@ -143,6 +145,53 @@ export default function SenderIdentities() {
         description: error.message || 'Failed to delete identity',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleVerifyDomain = async (identity: SenderIdentity) => {
+    setIsVerifying(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-domain`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ identity_id: identity.id }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.verified) {
+        toast({
+          title: 'Domain Verified!',
+          description: 'You can now send emails from this address.',
+        });
+      } else {
+        toast({
+          title: 'Verification Pending',
+          description: result.message || 'DNS records not found yet. Please try again later.',
+          variant: 'destructive',
+        });
+      }
+
+      fetchIdentities();
+    } catch (error: any) {
+      toast({
+        title: 'Verification Failed',
+        description: error.message || 'Failed to verify domain',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -320,6 +369,17 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
+                  {selectedIdentity.domain_status === 'unverified' && (
+                    <Alert className="border-destructive/50 bg-destructive/10">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Action Required</AlertTitle>
+                      <AlertDescription>
+                        After adding DNS records, you must click "Verify Domain" below to complete verification.
+                        The domain will not be verified automatically.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="rounded-lg bg-muted p-4">
                     <h4 className="font-medium mb-2">CNAME Record</h4>
                     <p className="text-sm text-muted-foreground mb-4">
@@ -329,12 +389,12 @@ export default function SenderIdentities() {
                       <div className="flex items-center justify-between p-3 bg-background rounded border">
                         <div>
                           <div className="text-xs text-muted-foreground">Host</div>
-                          <div className="font-mono text-sm">{selectedIdentity.dkim_record?.split('.')[0]}</div>
+                          <div className="font-mono text-sm">{selectedIdentity.dkim_record?.split('.')[0]}._domainkey</div>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => copyToClipboard(selectedIdentity.dkim_record?.split('.')[0] || '')}
+                          onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}._domainkey`)}
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
@@ -343,13 +403,13 @@ export default function SenderIdentities() {
                         <div>
                           <div className="text-xs text-muted-foreground">Value</div>
                           <div className="font-mono text-sm break-all">
-                            mail.{selectedIdentity.from_email.split('@')[1]}.provider.com
+                            {selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com
                           </div>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => copyToClipboard(`mail.${selectedIdentity.from_email.split('@')[1]}.provider.com`)}
+                          onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com`)}
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
@@ -357,9 +417,46 @@ export default function SenderIdentities() {
                     </div>
                   </div>
 
-                  <div className="text-sm text-muted-foreground">
-                    <strong>Note:</strong> DNS changes can take up to 48 hours to propagate.
-                    Once verified, you'll be able to send emails from this address.
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4" />
+                      Verify Your Domain
+                    </h4>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      After adding the CNAME record to your DNS, click the button below to verify your domain.
+                      DNS propagation can take up to 48 hours.
+                    </p>
+                    <Button
+                      onClick={() => handleVerifyDomain(selectedIdentity)}
+                      disabled={isVerifying || selectedIdentity.domain_status === 'verified'}
+                      className="w-full"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : selectedIdentity.domain_status === 'verified' ? (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Domain Verified
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Verify Domain Now
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p><strong>Important:</strong></p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>DNS changes can take up to 48 hours to propagate</li>
+                      <li>You must click "Verify Domain" after adding DNS records</li>
+                      <li>If verification fails, wait a few hours and try again</li>
+                    </ul>
                   </div>
                 </div>
               ) : (
