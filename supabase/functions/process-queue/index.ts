@@ -7,9 +7,6 @@ const corsHeaders = {
 
 interface QueueItem {
   id: string
-  user_id: string
-  campaign_id: string
-  contact_id: string
   from_email: string
   to_email: string
   subject: string
@@ -18,7 +15,8 @@ interface QueueItem {
   attempt_count: number
 }
 
-// Helper functions for AWS Signature Version 4
+// --- AWS SIGNATURE V4 HELPERS (Pure Web Crypto - No FS) ---
+
 async function sha256(message: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(message)
@@ -51,7 +49,6 @@ async function hmacSha256Hex(key: ArrayBuffer, message: string): Promise<string>
     .join('')
 }
 
-// AWS Signature Version 4 signing
 async function signRequest(
   method: string,
   url: string,
@@ -67,30 +64,28 @@ async function signRequest(
   const path = parsedUrl.pathname
   
   const now = new Date()
+  // AWS Format: YYYYMMDD'T'HHMMSS'Z'
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
   const dateStamp = amzDate.slice(0, 8)
   
-  // Create canonical request
-  const canonicalHeaders = `content-type:${headers['Content-Type']}\nhost:${host}\nx-amz-date:${amzDate}\n`
+  // Canonical Headers must be sorted by name and values trimmed
+  const canonicalHeaders = `content-type:${headers['Content-Type'].trim()}\nhost:${host}\nx-amz-date:${amzDate}\n`
   const signedHeaders = 'content-type;host;x-amz-date'
   
   const bodyHash = await sha256(body)
   const canonicalRequest = `${method}\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${bodyHash}`
   
-  // Create string to sign
   const algorithm = 'AWS4-HMAC-SHA256'
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`
   const canonicalRequestHash = await sha256(canonicalRequest)
   const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`
   
-  // Calculate signature using AWS4 signing key derivation
   const kDate = await hmacSha256(`AWS4${secretAccessKey}`, dateStamp)
   const kRegion = await hmacSha256(kDate, region)
   const kService = await hmacSha256(kRegion, service)
   const kSigning = await hmacSha256(kService, 'aws4_request')
   const signature = await hmacSha256Hex(kSigning, stringToSign)
   
-  // Create authorization header
   const authorizationHeader = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
   
   return {
@@ -112,7 +107,6 @@ async function sendEmailViaSES(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const endpoint = `https://email.${region}.amazonaws.com/`
   
-  // Build SES API request body
   const params = new URLSearchParams()
   params.append('Action', 'SendEmail')
   params.append('Source', from)
@@ -122,6 +116,17 @@ async function sendEmailViaSES(
   params.append('Message.Body.Html.Data', htmlBody)
   params.append('Message.Body.Html.Charset', 'UTF-8')
   params.append('Version', '2010-12-01')
+
+  // Robust Domain Extraction for Unsubscribe Header
+  // Handles "Bob <bob@mail.com>" and "bob@mail.com"
+  const emailMatch = from.match(/<(.+)>/) || [null, from]
+  const cleanEmail = emailMatch[1] || from
+  const domain = cleanEmail.split('@')[1]
+
+  if (domain) {
+    params.append('Message.Headers.member.1.Name', 'List-Unsubscribe')
+    params.append('Message.Headers.member.1.Value', `<mailto:unsubscribe@${domain}>`)
+  }
   
   const body = params.toString()
   
@@ -129,6 +134,7 @@ async function sendEmailViaSES(
     'Content-Type': 'application/x-www-form-urlencoded',
   }
   
+  // Sign the request
   const signedHeaders = await signRequest(
     'POST',
     endpoint,
@@ -151,45 +157,49 @@ async function sendEmailViaSES(
     
     if (!response.ok) {
       console.error('SES Error Response:', responseText)
-      // Extract error message from XML
+      // Extract XML error message
       const errorMatch = responseText.match(/<Message>(.*?)<\/Message>/s)
-      const errorMessage = errorMatch ? errorMatch[1] : responseText
+      const errorMessage = errorMatch ? errorMatch[1] : `SES Error ${response.status}: ${responseText}`
       return { success: false, error: errorMessage }
     }
     
-    // Extract MessageId from successful response
     const messageIdMatch = responseText.match(/<MessageId>(.*?)<\/MessageId>/)
     const messageId = messageIdMatch ? messageIdMatch[1] : undefined
     
     return { success: true, messageId }
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorMessage = error instanceof Error ? error.message : 'Unknown fetch error'
     return { success: false, error: errorMessage }
   }
 }
 
+// --- MAIN EXECUTION ---
+
 Deno.serve(async (req) => {
-  // Handle CORS preflight
+  // 1. Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    // 2. Setup Config
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
-    // AWS SES Configuration
+    // AWS SES Secrets (Required)
     const awsAccessKeyId = Deno.env.get('AWS_ACCESS_KEY_ID')
     const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY')
     const awsRegion = Deno.env.get('AWS_SES_REGION') || 'us-east-1'
 
+    // 3. Safety Check: Are secrets present?
     if (!awsAccessKeyId || !awsSecretAccessKey) {
-      throw new Error('AWS credentials not configured')
+      console.error('Missing AWS Secrets. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Supabase Edge Function Secrets.')
+      throw new Error('Server Configuration Error: Missing AWS Secrets')
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Fetch 50 pending emails
+    // 4. Fetch Batch of Pending Emails
     const { data: pendingEmails, error: fetchError } = await supabase
       .from('email_queue')
       .select('*')
@@ -197,100 +207,56 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(50)
 
-    if (fetchError) {
-      throw new Error(`Failed to fetch queue: ${fetchError.message}`)
-    }
+    if (fetchError) throw new Error(`DB Error: ${fetchError.message}`)
 
     if (!pendingEmails || pendingEmails.length === 0) {
       return new Response(
-        JSON.stringify({ processed: 0, success: 0, errors: 0, message: 'No pending emails' }),
+        JSON.stringify({ processed: 0, message: 'No pending emails' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Processing ${pendingEmails.length} pending emails`)
+    console.log(`Processing ${pendingEmails.length} emails...`)
 
     let successCount = 0
     let errorCount = 0
 
-    // Process each email
+    // 5. Send Loop
     for (const email of pendingEmails as QueueItem[]) {
-      try {
-        // Build email with tracking pixel
-        const trackingPixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${email.id}`
-        const bodyWithTracking = email.body + `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />`
+      
+      const result = await sendEmailViaSES(
+        email.from_email,
+        email.to_email,
+        email.subject,
+        email.body,
+        awsAccessKeyId,
+        awsSecretAccessKey,
+        awsRegion
+      )
 
-        // Rewrite links for click tracking
-        const bodyWithClickTracking = rewriteLinksForTracking(bodyWithTracking, email.id, supabaseUrl)
+      if (result.success) {
+        await supabase
+          .from('email_queue')
+          .update({
+            status: 'sent',
+            attempt_count: (email.attempt_count || 0) + 1,
+            // message_id: result.messageId // Uncomment if your table has this column
+          })
+          .eq('id', email.id)
 
-        // Send email via AWS SES
-        const result = await sendEmailViaSES(
-          email.from_email,
-          email.to_email,
-          email.subject,
-          bodyWithClickTracking,
-          awsAccessKeyId,
-          awsSecretAccessKey,
-          awsRegion
-        )
-
-        if (result.success) {
-          // Mark as sent
-          const { error: updateError } = await supabase
-            .from('email_queue')
-            .update({
-              status: 'sent',
-              sent_at: new Date().toISOString(),
-              attempt_count: email.attempt_count + 1,
-            })
-            .eq('id', email.id)
-
-          if (updateError) {
-            throw new Error(`Failed to update status: ${updateError.message}`)
-          }
-
-          successCount++
-          console.log(`Email sent successfully to ${email.to_email}, MessageId: ${result.messageId}`)
-        } else {
-          throw new Error(result.error || 'Unknown SES error')
-        }
-      } catch (emailError: unknown) {
+        successCount++
+      } else {
         errorCount++
-        const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown error'
-        console.error(`Failed to send email to ${email.to_email}:`, errorMessage)
+        console.error(`Failed to send to ${email.to_email}: ${result.error}`)
         
-        // Update as failed
         await supabase
           .from('email_queue')
           .update({
             status: 'failed',
-            attempt_count: email.attempt_count + 1,
-            error_log: errorMessage,
+            attempt_count: (email.attempt_count || 0) + 1,
+            error_log: result.error, 
           })
           .eq('id', email.id)
-      }
-    }
-
-    // Update campaign status if all emails are processed
-    const campaignIds = [...new Set(pendingEmails.map((e: QueueItem) => e.campaign_id))]
-    
-    for (const campaignId of campaignIds) {
-      const { count: pendingCount } = await supabase
-        .from('email_queue')
-        .select('*', { count: 'exact', head: true })
-        .eq('campaign_id', campaignId)
-        .eq('status', 'pending')
-
-      if (pendingCount === 0) {
-        await supabase
-          .from('campaigns')
-          .update({ status: 'completed' })
-          .eq('id', campaignId)
-      } else {
-        await supabase
-          .from('campaigns')
-          .update({ status: 'sending' })
-          .eq('id', campaignId)
       }
     }
 
@@ -302,28 +268,13 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+    
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('Process queue error:', errorMessage)
+    console.error('CRITICAL FUNCTION ERROR:', errorMessage)
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-
-// Helper function to rewrite links for click tracking
-function rewriteLinksForTracking(html: string, emailQueueId: string, supabaseUrl: string): string {
-  // Match href attributes in anchor tags
-  const linkRegex = /<a\s+([^>]*href=["'])([^"']+)(["'][^>]*)>/gi
-  
-  return html.replace(linkRegex, (match, before, url, after) => {
-    // Skip tracking pixel and mailto links
-    if (url.includes('track-open') || url.includes('track-click') || url.startsWith('mailto:')) {
-      return match
-    }
-    
-    const trackingUrl = `${supabaseUrl}/functions/v1/track-click?id=${emailQueueId}&url=${encodeURIComponent(url)}`
-    return `<a ${before}${trackingUrl}${after}>`
-  })
-}
