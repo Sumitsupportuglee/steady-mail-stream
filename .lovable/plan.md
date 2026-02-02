@@ -1,159 +1,74 @@
 
 
-# AgencyMail - Complete Build Plan
+# Plan: Fix Email Delivery - AWS SES Sandbox Mode Limitation
 
-## Overview
-A managed cold email infrastructure SaaS with a queue-first architecture for safe email delivery. Clean, light modern design with real email tracking capabilities.
+## Problem Identified
 
----
+After analyzing the edge function logs and database, I found the **root cause** of your email delivery failures:
 
-## Phase 1: Foundation & Database Setup
+**Error from AWS SES:**
+```
+Email address is not verified. The following identities failed the check in region AP-SOUTH-2: 
+sumit.bapu.356@gmail.com, support@personacraft.in
+```
 
-### Database Schema (5 Tables with RLS)
-- **profiles** - User accounts with organization name, email credits (unlimited for now), and tier
-- **sender_identities** - Custom domains with verification status and DKIM records
-- **contacts** - Lead management with email, name, and status tracking
-- **campaigns** - Email campaigns with subject, body, status, and recipient counts
-- **email_queue** - The throttling engine with pending/sent/failed status tracking
+Your AWS SES account is in **Sandbox mode**. In Sandbox mode, AWS requires **both** the sender AND recipient email addresses to be verified before you can send any email. This is a restriction AWS applies to all new accounts to prevent spam.
 
-### Security & RLS Policies
-- All tables will have Row Level Security enabled
-- Users can only access their own data across all tables
-- Security definer functions for role-based access patterns
+## Current State
 
----
+| Component | Status |
+|-----------|--------|
+| Sender domain | `support@personacraft.in` - Marked "verified" in your app |
+| Recipient email | `sumit.bapu.356@gmail.com` - **NOT verified** in AWS SES |
+| AWS SES account | **Sandbox mode** |
+| Email queue | 4 emails in "failed" status |
 
-## Phase 2: Core UI Components
+## Solution: Two-Step Fix
 
-### Navigation & Layout
-- Clean sidebar navigation with:
-  - Dashboard
-  - Sender Identities
-  - Contacts
-  - Campaigns
-  - Settings (placeholder)
-- Light, modern design with subtle shadows and clean typography
+### Step 1: Verify Your Recipient Email in AWS SES (Required for Sandbox)
 
-### Dashboard Page
-- **Credit Balance Display** - Large, prominent card showing available credits
-- **Quick Stats Cards** - Emails sent (30 days), Open rate, Click rate
-- **Recent Activity** - Last 5 campaigns with status indicators
-- **Quick Actions** - "New Campaign" and "Add Contacts" buttons
+Since your account is in Sandbox mode, you must verify the recipient email address before you can send to it.
 
----
+**Manual steps you need to do in your AWS Console:**
+1. Go to AWS Console → SES → Configuration → Verified identities
+2. Click "Create identity" → Choose "Email address"
+3. Enter `sumit.bapu.356@gmail.com` (or whichever email you want to receive test emails)
+4. Click "Create identity"
+5. Check your Gmail inbox and click the verification link AWS sends
 
-## Phase 3: Sender Identity Management
+### Step 2: Reset Failed Emails and Retry
 
-### Domain Setup Flow
-- **Add Identity Form** - Name and email address input
-- **Verification Card** - Displays after adding an identity:
-  - DNS configuration instructions
-  - CNAME record details (Host: `em123`, Value: placeholder for provider)
-  - Copy-to-clipboard functionality
-  - Status badge (Unverified/Verified)
-- **Identity List** - Table of all sender identities with verification status
+After you verify the recipient email in AWS, I will:
+
+1. **Reset the failed email queue entries** to `pending` status so the cron job will pick them up again
+2. The emails should then send successfully
+
+## What I Will Update in Code
+
+No code changes are needed. The edge function is working correctly. The issue is purely an AWS SES configuration limitation (Sandbox mode).
+
+I will run a database query to reset the failed emails to "pending" status so they can be retried once you complete the AWS verification step.
 
 ---
 
-## Phase 4: Contact Manager
+## Long-Term Solution: Exit SES Sandbox
 
-### Contact List
-- Sortable, searchable table of all contacts
-- Columns: Name, Email, Status, Date Added
-- Inline status indicators (Active, Bounced, Unsubscribed)
-- Bulk actions: Delete selected
+To send emails to any recipient without pre-verification, you need to request "Production Access" from AWS:
 
-### CSV Import Feature (Critical)
-- **Step 1**: File upload with drag-and-drop
-- **Step 2**: Column mapping interface (auto-detect "Email" and "Name")
-- **Step 3**: Preview imported data
-- **Step 4**: Bulk insert with progress indicator
-- Validation: Email format checking, duplicate detection
+1. Go to AWS Console → SES → Account dashboard
+2. Look for "Request production access" button
+3. Fill out the form explaining your use case (cold email platform for marketing)
+4. AWS typically responds within 24-48 hours
+
+Once approved, you can send to any email address - only the sender domain needs to be verified.
 
 ---
 
-## Phase 5: Campaign Wizard
+## Summary
 
-### 3-Step Campaign Creation
-**Step 1: Compose**
-- Subject line input
-- Rich text editor (TipTap) for HTML email body
-- Template variable support: `{{name}}`, `{{email}}`
-
-**Step 2: Select Audience**
-- Choose from: All Active Contacts, or specific contacts
-- Preview recipient count
-- Sender identity selection (from verified identities only)
-
-**Step 3: Review & Queue**
-- Campaign summary with cost calculation
-- Credit balance check
-- "Queue Campaign" button triggers:
-  1. Credit deduction (when payment added later)
-  2. Campaign creation with status 'queued'
-  3. Bulk insert into `email_queue` table
-  4. Success message: "Campaign Queued. Sending will start automatically."
-
----
-
-## Phase 6: Email Tracking System
-
-### Tracking Implementation
-- **Open Tracking**: Transparent 1x1 pixel image embedded in emails
-- **Click Tracking**: URL rewriting through tracking endpoint
-- **Tracking Tables**: 
-  - `email_opens` - Logs each open event with timestamp
-  - `email_clicks` - Logs each click with URL and timestamp
-
-### Analytics Dashboard Updates
-- Real open rates calculated from tracking data
-- Click-through rates per campaign
-- Timeline charts for email activity
-
----
-
-## Phase 7: Backend - Queue Processor
-
-### Edge Function: `process-queue`
-- **Trigger**: Cron job (every minute)
-- **Batch Size**: 50 pending emails per run
-- **Process**:
-  1. Fetch 50 rows with status 'pending'
-  2. Authenticate with `MASTER_SMTP_KEY` (env variable)
-  3. For each email:
-     - Inject List-Unsubscribe header
-     - Inject tracking pixel
-     - Rewrite links for click tracking
-     - Send via SMTP provider
-     - Update status to 'sent' or 'failed'
-     - Log errors if failed
-  4. Return summary: `{ processed: 50, success: 49, errors: 1 }`
-
-### Supporting Edge Functions
-- **track-open**: Records email opens from tracking pixel requests
-- **track-click**: Records clicks and redirects to original URL
-
----
-
-## Phase 8: Polish & Final Features
-
-### Campaign Management
-- Campaign list with status filters (Draft, Queued, Sending, Completed)
-- Campaign detail view with delivery stats
-- Queue progress indicator for active campaigns
-
-### Error Handling & UX
-- Toast notifications for all actions
-- Loading states throughout
-- Empty states with helpful prompts
-- Form validation with clear error messages
-
----
-
-## Tech Stack Summary
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **UI Components**: Shadcn/ui + TipTap Editor
-- **Backend**: Supabase (Auth, Database, Edge Functions)
-- **Email Provider**: Flexible design (credentials added later)
-- **Scheduling**: Supabase Cron for queue processing
+| Action | Who Does It | When |
+|--------|-------------|------|
+| Verify recipient email in AWS SES | You (manual AWS step) | Now |
+| Reset failed emails to retry | Me (database update) | After you approve this plan |
+| Request SES production access | You (optional but recommended) | When ready to scale |
 
