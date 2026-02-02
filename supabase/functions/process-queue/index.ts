@@ -7,12 +7,43 @@ const corsHeaders = {
 
 interface QueueItem {
   id: string
+  campaign_id: string
   from_email: string
   to_email: string
   subject: string
   body: string
   status: string
   attempt_count: number
+}
+
+async function updateCampaignStatuses(
+  supabase: any,
+  campaignIds: string[]
+): Promise<void> {
+  for (const campaignId of campaignIds) {
+    const { count: pendingCount, error: pendingError } = await supabase
+      .from('email_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('campaign_id', campaignId)
+      .eq('status', 'pending')
+
+    if (pendingError) {
+      console.error(`Failed to count pending emails for campaign ${campaignId}:`, pendingError)
+      continue
+    }
+
+    const pending = pendingCount ?? 0
+    const newStatus = pending === 0 ? 'completed' : 'sending'
+
+    const { error: updateError } = await supabase
+      .from('campaigns')
+      .update({ status: newStatus })
+      .eq('id', campaignId)
+
+    if (updateError) {
+      console.error(`Failed to update campaign ${campaignId} status to ${newStatus}:`, updateError)
+    }
+  }
 }
 
 // --- AWS SIGNATURE V4 HELPERS (Pure Web Crypto - No FS) ---
@@ -220,9 +251,11 @@ Deno.serve(async (req) => {
 
     let successCount = 0
     let errorCount = 0
+    const affectedCampaignIds = new Set<string>()
 
     // 5. Send Loop
     for (const email of pendingEmails as QueueItem[]) {
+      if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
       
       const result = await sendEmailViaSES(
         email.from_email,
@@ -240,6 +273,7 @@ Deno.serve(async (req) => {
           .update({
             status: 'sent',
             attempt_count: (email.attempt_count || 0) + 1,
+            sent_at: new Date().toISOString(),
             // message_id: result.messageId // Uncomment if your table has this column
           })
           .eq('id', email.id)
@@ -258,6 +292,11 @@ Deno.serve(async (req) => {
           })
           .eq('id', email.id)
       }
+    }
+
+    // 6. Update campaign status based on remaining pending emails
+    if (affectedCampaignIds.size > 0) {
+      await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
     }
 
     return new Response(
