@@ -1,16 +1,15 @@
 import { 
   LayoutDashboard, 
-  Mail, 
   Users, 
-  Send, 
+  Shield,
+  Mail,
   Settings,
   LogOut,
-  Shield
+  ArrowLeft
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
-import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAdminCheck } from '@/hooks/useAdminCheck';
+import { Link } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -25,46 +24,42 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 
-const mainNavItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Sender Identities', url: '/identities', icon: Mail },
-  { title: 'Contacts', url: '/contacts', icon: Users },
-  { title: 'Campaigns', url: '/campaigns', icon: Send },
+const adminNavItems = [
+  { title: 'Overview', url: '/admin', icon: LayoutDashboard },
+  { title: 'User Management', url: '/admin/users', icon: Users },
+  { title: 'SES Identities', url: '/admin/ses-identities', icon: Mail },
+  { title: 'Rate Limits', url: '/admin/rate-limits', icon: Settings },
 ];
 
-const settingsItems = [
-  { title: 'Settings', url: '/settings', icon: Settings },
-];
-
-export function AppSidebar() {
+export function AdminSidebar() {
   const { signOut, user } = useAuth();
-  const { isAdmin } = useAdminCheck();
 
   return (
     <Sidebar className="border-r border-border">
       <SidebarHeader className="p-6 border-b border-border">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Mail className="h-4 w-4 text-primary-foreground" />
+          <div className="h-8 w-8 rounded-lg bg-destructive flex items-center justify-center">
+            <Shield className="h-4 w-4 text-destructive-foreground" />
           </div>
-          <span className="font-semibold text-lg">AgencyMail</span>
+          <span className="font-semibold text-lg">Admin Panel</span>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="px-4 py-4">
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-            Main
+            Administration
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {adminNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
                       to={item.url} 
+                      end={item.url === '/admin'}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      activeClassName="bg-primary/10 text-primary font-medium"
+                      activeClassName="bg-destructive/10 text-destructive font-medium"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -77,38 +72,19 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-            Account
-          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink 
-                      to={item.url} 
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      activeClassName="bg-primary/10 text-primary font-medium"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link 
-                      to="/admin"
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    >
-                      <Shield className="h-4 w-4" />
-                      <span>Admin Panel</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link 
+                    to="/dashboard"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>Back to App</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

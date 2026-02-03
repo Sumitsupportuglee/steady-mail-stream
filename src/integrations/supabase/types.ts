@@ -283,24 +283,45 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          daily_send_limit: number | null
           email_credits: number | null
+          emails_sent_this_hour: number | null
+          emails_sent_today: number | null
+          hourly_send_limit: number | null
           id: string
+          is_approved: boolean | null
+          last_daily_reset: string | null
+          last_hourly_reset: string | null
           organization_name: string | null
           tier: Database["public"]["Enums"]["tier_type"] | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          daily_send_limit?: number | null
           email_credits?: number | null
+          emails_sent_this_hour?: number | null
+          emails_sent_today?: number | null
+          hourly_send_limit?: number | null
           id: string
+          is_approved?: boolean | null
+          last_daily_reset?: string | null
+          last_hourly_reset?: string | null
           organization_name?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          daily_send_limit?: number | null
           email_credits?: number | null
+          emails_sent_this_hour?: number | null
+          emails_sent_today?: number | null
+          hourly_send_limit?: number | null
           id?: string
+          is_approved?: boolean | null
+          last_daily_reset?: string | null
+          last_hourly_reset?: string | null
           organization_name?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
           updated_at?: string | null
@@ -354,14 +375,42 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "user"
       campaign_status_type: "draft" | "queued" | "sending" | "completed"
       contact_status_type: "active" | "bounced" | "unsubscribed"
       domain_status_type: "unverified" | "verified"
@@ -494,6 +543,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "user"],
       campaign_status_type: ["draft", "queued", "sending", "completed"],
       contact_status_type: ["active", "bounced", "unsubscribed"],
       domain_status_type: ["unverified", "verified"],
