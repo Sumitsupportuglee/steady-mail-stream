@@ -16,16 +16,20 @@ export function useAdminCheck() {
       }
 
       try {
-        const { data, error } = await supabase.rpc('has_role', {
-          _user_id: user.id,
-          _role: 'admin'
-        });
+        // Query user_roles table directly instead of using RPC
+        // This avoids enum type casting issues with the Supabase JS client
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
 
         if (error) {
           console.error('Error checking admin role:', error);
           setIsAdmin(false);
         } else {
-          setIsAdmin(data === true);
+          setIsAdmin(data !== null);
         }
       } catch (err) {
         console.error('Admin check failed:', err);
