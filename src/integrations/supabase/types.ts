@@ -293,6 +293,11 @@ export type Database = {
           last_daily_reset: string | null
           last_hourly_reset: string | null
           organization_name: string | null
+          smtp_encryption: string | null
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_username: string | null
           tier: Database["public"]["Enums"]["tier_type"] | null
           updated_at: string | null
         }
@@ -308,6 +313,11 @@ export type Database = {
           last_daily_reset?: string | null
           last_hourly_reset?: string | null
           organization_name?: string | null
+          smtp_encryption?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
           updated_at?: string | null
         }
@@ -323,6 +333,11 @@ export type Database = {
           last_daily_reset?: string | null
           last_hourly_reset?: string | null
           organization_name?: string | null
+          smtp_encryption?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
           updated_at?: string | null
         }
