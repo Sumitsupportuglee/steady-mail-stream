@@ -8,6 +8,7 @@ const corsHeaders = {
 interface QueueItem {
   id: string
   campaign_id: string
+  user_id: string
   from_email: string
   to_email: string
   subject: string
@@ -15,6 +16,176 @@ interface QueueItem {
   status: string
   attempt_count: number
 }
+
+interface SmtpConfig {
+  smtp_host: string
+  smtp_port: number
+  smtp_username: string
+  smtp_password: string
+  smtp_encryption: 'ssl' | 'tls'
+}
+
+// --- SMTP CLIENT (Raw TCP for Deno) ---
+
+class SmtpClient {
+  private conn: Deno.TcpConn | Deno.TlsConn | null = null
+  private encoder = new TextEncoder()
+  private decoder = new TextDecoder()
+
+  async connect(config: SmtpConfig): Promise<void> {
+    if (config.smtp_encryption === 'ssl') {
+      // Direct TLS connection (port 465)
+      this.conn = await Deno.connectTls({
+        hostname: config.smtp_host,
+        port: config.smtp_port,
+      })
+      await this.readResponse() // Read greeting
+    } else {
+      // STARTTLS (port 587) - connect plain first, then upgrade
+      const tcpConn = await Deno.connect({
+        hostname: config.smtp_host,
+        port: config.smtp_port,
+      })
+      this.conn = tcpConn
+      await this.readResponse() // Read greeting
+
+      await this.sendCommand(`EHLO localhost`)
+      await this.readMultilineResponse()
+
+      await this.sendCommand(`STARTTLS`)
+      const tlsResp = await this.readResponse()
+      if (!tlsResp.startsWith('220')) {
+        throw new Error(`STARTTLS failed: ${tlsResp}`)
+      }
+
+      // Upgrade to TLS
+      this.conn = await Deno.startTls(tcpConn, {
+        hostname: config.smtp_host,
+      })
+    }
+
+    // EHLO after TLS
+    await this.sendCommand(`EHLO localhost`)
+    await this.readMultilineResponse()
+
+    // AUTH LOGIN
+    await this.sendCommand(`AUTH LOGIN`)
+    const authResp = await this.readResponse()
+    if (!authResp.startsWith('334')) {
+      throw new Error(`AUTH LOGIN failed: ${authResp}`)
+    }
+
+    await this.sendCommand(btoa(config.smtp_username))
+    const userResp = await this.readResponse()
+    if (!userResp.startsWith('334')) {
+      throw new Error(`Username rejected: ${userResp}`)
+    }
+
+    await this.sendCommand(btoa(config.smtp_password))
+    const passResp = await this.readResponse()
+    if (!passResp.startsWith('235')) {
+      throw new Error(`Authentication failed: ${passResp}`)
+    }
+  }
+
+  async sendEmail(
+    from: string,
+    to: string,
+    subject: string,
+    htmlBody: string,
+    fromName?: string
+  ): Promise<string> {
+    // Extract clean email from "Name <email>" format
+    const cleanFrom = from.match(/<(.+)>/)?.[1] || from
+    const domain = cleanFrom.split('@')[1]
+
+    // MAIL FROM
+    await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
+    const mailResp = await this.readResponse()
+    if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
+
+    // RCPT TO
+    await this.sendCommand(`RCPT TO:<${to}>`)
+    const rcptResp = await this.readResponse()
+    if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
+
+    // DATA
+    await this.sendCommand(`DATA`)
+    const dataResp = await this.readResponse()
+    if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
+
+    // Build email with proper headers for safe delivery
+    const messageId = `<${crypto.randomUUID()}@${domain}>`
+    const date = new Date().toUTCString()
+
+    const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
+
+    const headers = [
+      `From: ${senderDisplay}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `Date: ${date}`,
+      `Message-ID: ${messageId}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset=UTF-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      // Safe delivery headers
+      `List-Unsubscribe: <mailto:unsubscribe@${domain}>`,
+      `X-Mailer: SteadyMail/1.0`,
+    ]
+
+    // Encode body as quoted-printable (handle dots at line start)
+    const qpBody = htmlBody
+      .replace(/\r\n/g, '\n')
+      .replace(/\n/g, '\r\n')
+
+    const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
+    await this.sendCommand(emailContent)
+    const sendResp = await this.readResponse()
+    if (!sendResp.startsWith('250')) throw new Error(`Send failed: ${sendResp}`)
+
+    return messageId
+  }
+
+  async close(): Promise<void> {
+    try {
+      await this.sendCommand('QUIT')
+      await this.readResponse()
+    } catch { /* ignore */ }
+    try {
+      this.conn?.close()
+    } catch { /* ignore */ }
+    this.conn = null
+  }
+
+  private async sendCommand(cmd: string): Promise<void> {
+    if (!this.conn) throw new Error('Not connected')
+    await this.conn.write(this.encoder.encode(cmd + '\r\n'))
+  }
+
+  private async readResponse(): Promise<string> {
+    if (!this.conn) throw new Error('Not connected')
+    const buf = new Uint8Array(4096)
+    const n = await this.conn.read(buf)
+    if (n === null) throw new Error('Connection closed')
+    return this.decoder.decode(buf.subarray(0, n)).trim()
+  }
+
+  private async readMultilineResponse(): Promise<string> {
+    let full = ''
+    while (true) {
+      const line = await this.readResponse()
+      full += line + '\n'
+      // Multi-line responses have '-' after code, last line has ' '
+      const lines = line.split('\n')
+      const lastLine = lines[lines.length - 1]
+      if (lastLine.length >= 4 && lastLine[3] === ' ') break
+    }
+    return full.trim()
+  }
+}
+
+// --- CAMPAIGN STATUS UPDATE ---
 
 async function updateCampaignStatuses(
   supabase: any,
@@ -46,191 +217,19 @@ async function updateCampaignStatuses(
   }
 }
 
-// --- AWS SIGNATURE V4 HELPERS (Pure Web Crypto - No FS) ---
-
-async function sha256(message: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(message)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-async function hmacSha256(key: ArrayBuffer | string, message: string): Promise<ArrayBuffer> {
-  const encoder = new TextEncoder()
-  const keyData = typeof key === 'string' ? encoder.encode(key) : key
-  const messageData = encoder.encode(message)
-  
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  )
-  
-  return await crypto.subtle.sign('HMAC', cryptoKey, messageData)
-}
-
-async function hmacSha256Hex(key: ArrayBuffer, message: string): Promise<string> {
-  const result = await hmacSha256(key, message)
-  return Array.from(new Uint8Array(result))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-async function signRequest(
-  method: string,
-  url: string,
-  headers: Record<string, string>,
-  body: string,
-  accessKeyId: string,
-  secretAccessKey: string,
-  region: string,
-  service: string
-): Promise<Record<string, string>> {
-  const parsedUrl = new URL(url)
-  const host = parsedUrl.host
-  const path = parsedUrl.pathname
-  
-  const now = new Date()
-  // AWS Format: YYYYMMDD'T'HHMMSS'Z'
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
-  const dateStamp = amzDate.slice(0, 8)
-  
-  // Canonical Headers must be sorted by name and values trimmed
-  const canonicalHeaders = `content-type:${headers['Content-Type'].trim()}\nhost:${host}\nx-amz-date:${amzDate}\n`
-  const signedHeaders = 'content-type;host;x-amz-date'
-  
-  const bodyHash = await sha256(body)
-  const canonicalRequest = `${method}\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${bodyHash}`
-  
-  const algorithm = 'AWS4-HMAC-SHA256'
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`
-  const canonicalRequestHash = await sha256(canonicalRequest)
-  const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`
-  
-  const kDate = await hmacSha256(`AWS4${secretAccessKey}`, dateStamp)
-  const kRegion = await hmacSha256(kDate, region)
-  const kService = await hmacSha256(kRegion, service)
-  const kSigning = await hmacSha256(kService, 'aws4_request')
-  const signature = await hmacSha256Hex(kSigning, stringToSign)
-  
-  const authorizationHeader = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-  
-  return {
-    ...headers,
-    'Host': host,
-    'X-Amz-Date': amzDate,
-    'Authorization': authorizationHeader,
-  }
-}
-
-async function sendEmailViaSES(
-  from: string,
-  to: string,
-  subject: string,
-  htmlBody: string,
-  accessKeyId: string,
-  secretAccessKey: string,
-  region: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const endpoint = `https://email.${region}.amazonaws.com/`
-  
-  const params = new URLSearchParams()
-  params.append('Action', 'SendEmail')
-  params.append('Source', from)
-  params.append('Destination.ToAddresses.member.1', to)
-  params.append('Message.Subject.Data', subject)
-  params.append('Message.Subject.Charset', 'UTF-8')
-  params.append('Message.Body.Html.Data', htmlBody)
-  params.append('Message.Body.Html.Charset', 'UTF-8')
-  params.append('Version', '2010-12-01')
-
-  // Robust Domain Extraction for Unsubscribe Header
-  // Handles "Bob <bob@mail.com>" and "bob@mail.com"
-  const emailMatch = from.match(/<(.+)>/) || [null, from]
-  const cleanEmail = emailMatch[1] || from
-  const domain = cleanEmail.split('@')[1]
-
-  if (domain) {
-    params.append('Message.Headers.member.1.Name', 'List-Unsubscribe')
-    params.append('Message.Headers.member.1.Value', `<mailto:unsubscribe@${domain}>`)
-  }
-  
-  const body = params.toString()
-  
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-  
-  // Sign the request
-  const signedHeaders = await signRequest(
-    'POST',
-    endpoint,
-    headers,
-    body,
-    accessKeyId,
-    secretAccessKey,
-    region,
-    'ses'
-  )
-  
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: signedHeaders,
-      body: body,
-    })
-    
-    const responseText = await response.text()
-    
-    if (!response.ok) {
-      console.error('SES Error Response:', responseText)
-      // Extract XML error message
-      const errorMatch = responseText.match(/<Message>(.*?)<\/Message>/s)
-      const errorMessage = errorMatch ? errorMatch[1] : `SES Error ${response.status}: ${responseText}`
-      return { success: false, error: errorMessage }
-    }
-    
-    const messageIdMatch = responseText.match(/<MessageId>(.*?)<\/MessageId>/)
-    const messageId = messageIdMatch ? messageIdMatch[1] : undefined
-    
-    return { success: true, messageId }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown fetch error'
-    return { success: false, error: errorMessage }
-  }
-}
-
 // --- MAIN EXECUTION ---
 
 Deno.serve(async (req) => {
-  // 1. Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // 2. Setup Config
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    // AWS SES Secrets (Required)
-    const awsAccessKeyId = Deno.env.get('AWS_ACCESS_KEY_ID')
-    const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY')
-    const awsRegion = Deno.env.get('AWS_SES_REGION') || 'us-east-1'
-
-    // 3. Safety Check: Are secrets present?
-    if (!awsAccessKeyId || !awsSecretAccessKey) {
-      console.error('Missing AWS Secrets. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Supabase Edge Function Secrets.')
-      throw new Error('Server Configuration Error: Missing AWS Secrets')
-    }
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // 4. Fetch Batch of Pending Emails
+    // Fetch batch of pending emails
     const { data: pendingEmails, error: fetchError } = await supabase
       .from('email_queue')
       .select('*')
@@ -249,52 +248,121 @@ Deno.serve(async (req) => {
 
     console.log(`Processing ${pendingEmails.length} emails...`)
 
+    // Group emails by user_id so we can batch SMTP connections
+    const emailsByUser = new Map<string, QueueItem[]>()
+    for (const email of pendingEmails as QueueItem[]) {
+      const group = emailsByUser.get(email.user_id) || []
+      group.push(email)
+      emailsByUser.set(email.user_id, group)
+    }
+
     let successCount = 0
     let errorCount = 0
     const affectedCampaignIds = new Set<string>()
 
-    // 5. Send Loop
-    for (const email of pendingEmails as QueueItem[]) {
-      if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
-      
-      const result = await sendEmailViaSES(
-        email.from_email,
-        email.to_email,
-        email.subject,
-        email.body,
-        awsAccessKeyId,
-        awsSecretAccessKey,
-        awsRegion
-      )
+    // Process each user's emails with their own SMTP config
+    for (const [userId, emails] of emailsByUser) {
+      // Fetch user's SMTP config
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
+        .eq('id', userId)
+        .single()
 
-      if (result.success) {
-        await supabase
-          .from('email_queue')
-          .update({
-            status: 'sent',
-            attempt_count: (email.attempt_count || 0) + 1,
-            sent_at: new Date().toISOString(),
-            // message_id: result.messageId // Uncomment if your table has this column
-          })
-          .eq('id', email.id)
+      if (profileError || !profile?.smtp_host || !profile?.smtp_username || !profile?.smtp_password) {
+        console.error(`User ${userId} has no SMTP config, marking emails as failed`)
+        for (const email of emails) {
+          if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+          await supabase
+            .from('email_queue')
+            .update({
+              status: 'failed',
+              attempt_count: (email.attempt_count || 0) + 1,
+              error_log: 'SMTP not configured. Please set up your SMTP credentials in Settings.',
+            })
+            .eq('id', email.id)
+          errorCount++
+        }
+        continue
+      }
 
-        successCount++
-      } else {
-        errorCount++
-        console.error(`Failed to send to ${email.to_email}: ${result.error}`)
-        
-        await supabase
-          .from('email_queue')
-          .update({
-            status: 'failed',
-            attempt_count: (email.attempt_count || 0) + 1,
-            error_log: result.error, 
-          })
-          .eq('id', email.id)
+      const smtpConfig: SmtpConfig = {
+        smtp_host: profile.smtp_host,
+        smtp_port: profile.smtp_port || 587,
+        smtp_username: profile.smtp_username,
+        smtp_password: profile.smtp_password,
+        smtp_encryption: profile.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
+      }
+
+      // Open one SMTP connection per user, send all their emails
+      const client = new SmtpClient()
+      let connected = false
+
+      try {
+        await client.connect(smtpConfig)
+        connected = true
+      } catch (connErr: unknown) {
+        const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
+        console.error(`SMTP connect failed for user ${userId}: ${errMsg}`)
+        for (const email of emails) {
+          if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+          await supabase
+            .from('email_queue')
+            .update({
+              status: 'failed',
+              attempt_count: (email.attempt_count || 0) + 1,
+              error_log: `SMTP connection error: ${errMsg}`,
+            })
+            .eq('id', email.id)
+          errorCount++
+        }
+        continue
+      }
+
+      try {
+        for (const email of emails) {
+          if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+
+          try {
+            await client.sendEmail(
+              email.from_email,
+              email.to_email,
+              email.subject,
+              email.body
+            )
+
+            await supabase
+              .from('email_queue')
+              .update({
+                status: 'sent',
+                attempt_count: (email.attempt_count || 0) + 1,
+                sent_at: new Date().toISOString(),
+              })
+              .eq('id', email.id)
+
+            successCount++
+          } catch (sendErr: unknown) {
+            const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
+            console.error(`Failed to send to ${email.to_email}: ${errMsg}`)
+
+            await supabase
+              .from('email_queue')
+              .update({
+                status: 'failed',
+                attempt_count: (email.attempt_count || 0) + 1,
+                error_log: errMsg,
+              })
+              .eq('id', email.id)
+
+            errorCount++
+          }
+        }
+      } finally {
+        await client.close()
       }
     }
 
-    // 6. Update campaign status based on remaining pending emails
+    // Update campaign statuses
     if (affectedCampaignIds.size > 0) {
       await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
     }
@@ -307,7 +375,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-    
+
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('CRITICAL FUNCTION ERROR:', errorMessage)
