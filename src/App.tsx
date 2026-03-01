@@ -16,6 +16,7 @@ import Campaigns from "./pages/Campaigns";
 import CampaignWizard from "./pages/CampaignWizard";
 import CampaignDetail from "./pages/CampaignDetail";
 import Settings from "./pages/Settings";
+import LeadFinder from "./pages/LeadFinder";
 import NotFound from "./pages/NotFound";
 
 // Admin Pages
@@ -84,6 +85,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CampaignDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads"
+              element={
+                <ProtectedRoute>
+                  <LeadFinder />
                 </ProtectedRoute>
               }
             />

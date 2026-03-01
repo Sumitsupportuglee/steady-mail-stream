@@ -5,7 +5,8 @@ import {
   Send, 
   Settings,
   LogOut,
-  Shield
+  Shield,
+  SearchCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Link } from 'react-router-dom';
@@ -27,6 +28,7 @@ import { Button } from '@/components/ui/button';
 
 const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Lead Finder', url: '/leads', icon: SearchCheck },
   { title: 'Sender Identities', url: '/identities', icon: Mail },
   { title: 'Contacts', url: '/contacts', icon: Users },
   { title: 'Campaigns', url: '/campaigns', icon: Send },
