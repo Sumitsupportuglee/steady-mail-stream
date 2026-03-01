@@ -38,29 +38,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const isNetworkAuthError = (error: unknown) => {
+    if (!error || typeof error !== 'object') return false;
+
+    const maybeError = error as { message?: string; name?: string; status?: number };
+    const message = (maybeError.message ?? '').toLowerCase();
+
+    return (
+      maybeError.status === 0 ||
+      maybeError.name === 'AuthRetryableFetchError' ||
+      message.includes('networkerror') ||
+      message.includes('network request failed') ||
+      message.includes('failed to fetch')
+    );
+  };
+
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const runAuthWithRetry = async <T,>(request: () => Promise<T>, maxAttempts = 3): Promise<T> => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await request();
+      } catch (error) {
+        lastError = error;
+
+        if (!isNetworkAuthError(error) || attempt === maxAttempts) {
+          throw error;
+        }
+
+        await wait(500 * attempt);
+      }
+    }
+
+    throw lastError;
+  };
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    try {
+      const { error } = await runAuthWithRetry(() =>
+        supabase.auth.signInWithPassword({ email, password })
+      );
+      return { error: error as Error | null };
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error
+            : new Error('Unable to connect to authentication service. Please try again.'),
+      };
+    }
   };
 
   const signUp = async (email: string, password: string, organizationName?: string) => {
-    const { error, data } = await supabase.auth.signUp({ 
-      email, 
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
+    try {
+      const { error, data } = await runAuthWithRetry(() =>
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        })
+      );
+
+      if (!error && data.user && organizationName) {
+        // Update the profile with organization name
+        await supabase
+          .from('profiles')
+          .update({ organization_name: organizationName })
+          .eq('id', data.user.id);
       }
-    });
 
-    if (!error && data.user && organizationName) {
-      // Update the profile with organization name
-      await supabase
-        .from('profiles')
-        .update({ organization_name: organizationName })
-        .eq('id', data.user.id);
+      return { error: error as Error | null };
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error
+            : new Error('Unable to connect to authentication service. Please try again.'),
+      };
     }
-
-    return { error: error as Error | null };
   };
 
   const signOut = async () => {
