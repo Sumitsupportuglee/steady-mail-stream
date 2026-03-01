@@ -34,48 +34,84 @@ export default function Auth() {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const getFriendlyErrorMessage = (error: Error) => {
+    const message = error.message?.toLowerCase() ?? '';
+
+    if (
+      message.includes('networkerror') ||
+      message.includes('network request failed') ||
+      message.includes('failed to fetch')
+    ) {
+      return 'Cannot reach authentication service. Please check your internet, VPN/firewall, and try again.';
+    }
+
+    return error.message;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = await signIn(loginEmail, loginPassword);
+    try {
+      const { error } = await signIn(loginEmail, loginPassword);
 
-    if (error) {
+      if (error) {
+        toast({
+          title: 'Login failed',
+          description: getFriendlyErrorMessage(error),
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Welcome back!',
+          description: 'You have successfully logged in.',
+        });
+      }
+    } catch (error) {
       toast({
         title: 'Login failed',
-        description: error.message,
+        description:
+          error instanceof Error
+            ? getFriendlyErrorMessage(error)
+            : 'Unexpected login error. Please try again.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in.',
-      });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = await signUp(signupEmail, signupPassword, organizationName);
+    try {
+      const { error } = await signUp(signupEmail, signupPassword, organizationName);
 
-    if (error) {
+      if (error) {
+        toast({
+          title: 'Signup failed',
+          description: getFriendlyErrorMessage(error),
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Account created!',
+          description: 'Welcome to AgencyMail.',
+        });
+      }
+    } catch (error) {
       toast({
         title: 'Signup failed',
-        description: error.message,
+        description:
+          error instanceof Error
+            ? getFriendlyErrorMessage(error)
+            : 'Unexpected signup error. Please try again.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Account created!',
-        description: 'Welcome to AgencyMail.',
-      });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
