@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, Loader2 } from 'lucide-react';
+import { Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export default function Auth() {
@@ -117,6 +117,14 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <div className="w-full max-w-md">
+        <div className="mb-6">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back to Home
+            </Link>
+          </Button>
+        </div>
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
