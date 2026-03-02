@@ -17,6 +17,7 @@ import CampaignWizard from "./pages/CampaignWizard";
 import CampaignDetail from "./pages/CampaignDetail";
 import Settings from "./pages/Settings";
 import LeadFinder from "./pages/LeadFinder";
+import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 
 // Admin Pages
@@ -39,7 +40,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             
             {/* Protected routes */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Landing />} />
             <Route
               path="/dashboard"
               element={
