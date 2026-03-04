@@ -15,7 +15,6 @@ interface ScrapedLead {
 function extractEmails(text: string): string[] {
   const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
   const matches = text.match(emailRegex) || [];
-  // Filter out common false positives
   const filtered = matches.filter(email => {
     const lower = email.toLowerCase();
     return !lower.endsWith('.png') &&
@@ -43,17 +42,14 @@ function extractPhones(text: string): string[] {
 
 function extractBusinessName(markdown: string, metadata: any): string | null {
   if (metadata?.title) {
-    // Clean up title - remove suffix like "| Company" or "- Home"
     return metadata.title.split(/[|\-–—]/)[0].trim() || metadata.title;
   }
-  // Try first heading
   const h1Match = markdown.match(/^#\s+(.+)$/m);
   if (h1Match) return h1Match[1].trim();
   return null;
 }
 
 function extractAddress(text: string): string | null {
-  // Look for common address patterns
   const addressPatterns = [
     /\d{1,5}\s[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl)[\s,]*[\w\s]*,?\s*[A-Z]{2}\s*\d{5}/i,
     /(?:Address|Location|Office):\s*(.+?)(?:\n|$)/i,
@@ -90,92 +86,148 @@ Deno.serve(async (req) => {
 
     const leads: ScrapedLead[] = [];
 
-    if (mode === 'url') {
-      // Scrape a single URL
-      let url = query.trim();
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = `https://${url}`;
-      }
+    // Use AbortController with 20s timeout to avoid edge function timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      console.log('Scraping single URL:', url);
+    try {
+      if (mode === 'url') {
+        let url = query.trim();
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = `https://${url}`;
+        }
 
-      const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url,
-          formats: ['markdown'],
-          onlyMainContent: false,
-        }),
-      });
+        console.log('Scraping single URL:', url);
 
-      const scrapeData = await scrapeRes.json();
-
-      if (scrapeRes.ok && scrapeData.success) {
-        const markdown = scrapeData.data?.markdown || scrapeData.markdown || '';
-        const metadata = scrapeData.data?.metadata || scrapeData.metadata || {};
-
-        leads.push({
-          url,
-          name: extractBusinessName(markdown, metadata),
-          emails: extractEmails(markdown),
-          phones: extractPhones(markdown),
-          website: url,
-          address: extractAddress(markdown),
-        });
-      }
-    } else {
-      // Search mode - use Firecrawl search
-      console.log('Searching for:', query);
-
-      const searchRes = await fetch('https://api.firecrawl.dev/v1/search', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: query + ' contact email phone',
-          limit: 10,
-          scrapeOptions: {
-            formats: ['markdown'],
+        const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({
+            url,
+            formats: ['markdown'],
+            onlyMainContent: false,
+          }),
+          signal: controller.signal,
+        });
 
-      const searchData = await searchRes.json();
+        const scrapeData = await scrapeRes.json();
 
-      if (!searchRes.ok) {
-        console.error('Firecrawl search error:', searchData);
-        return new Response(
-          JSON.stringify({ success: false, error: searchData.error || `Search failed with status ${searchRes.status}` }),
-          { status: searchRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+        if (scrapeRes.ok && scrapeData.success) {
+          const markdown = scrapeData.data?.markdown || scrapeData.markdown || '';
+          const metadata = scrapeData.data?.metadata || scrapeData.metadata || {};
 
-      const results = searchData.data || [];
-
-      for (const result of results) {
-        const markdown = result.markdown || '';
-        const metadata = result.metadata || {};
-        const emails = extractEmails(markdown);
-        const phones = extractPhones(markdown);
-
-        // Only include results that have at least an email or phone
-        if (emails.length > 0 || phones.length > 0) {
           leads.push({
-            url: result.url || metadata.sourceURL || '',
-            name: extractBusinessName(markdown, metadata) || result.title || null,
-            emails,
-            phones,
-            website: result.url || null,
+            url,
+            name: extractBusinessName(markdown, metadata),
+            emails: extractEmails(markdown),
+            phones: extractPhones(markdown),
+            website: url,
             address: extractAddress(markdown),
           });
+        } else {
+          console.error('Scrape failed:', scrapeData);
+        }
+      } else {
+        // Search mode - use Firecrawl search WITHOUT scraping content (much faster)
+        console.log('Searching for:', query);
+
+        const searchRes = await fetch('https://api.firecrawl.dev/v1/search', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: query + ' contact email phone',
+            limit: 5,
+          }),
+          signal: controller.signal,
+        });
+
+        const searchData = await searchRes.json();
+
+        if (!searchRes.ok) {
+          console.error('Firecrawl search error:', searchData);
+          clearTimeout(timeoutId);
+          return new Response(
+            JSON.stringify({ success: false, error: searchData.error || `Search failed with status ${searchRes.status}` }),
+            { status: searchRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('Search returned, now scraping top results individually...');
+        const results = searchData.data || [];
+
+        // Scrape each result URL individually with a short timeout per URL
+        const scrapePromises = results.slice(0, 3).map(async (result: any) => {
+          try {
+            const urlToScrape = result.url;
+            if (!urlToScrape) return null;
+
+            const perUrlController = new AbortController();
+            const perUrlTimeout = setTimeout(() => perUrlController.abort(), 8000);
+
+            const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                url: urlToScrape,
+                formats: ['markdown'],
+                onlyMainContent: false,
+              }),
+              signal: perUrlController.signal,
+            });
+
+            clearTimeout(perUrlTimeout);
+            const scrapeData = await scrapeRes.json();
+
+            if (scrapeRes.ok && scrapeData.success) {
+              const markdown = scrapeData.data?.markdown || scrapeData.markdown || '';
+              const metadata = scrapeData.data?.metadata || scrapeData.metadata || {};
+              const emails = extractEmails(markdown);
+              const phones = extractPhones(markdown);
+
+              if (emails.length > 0 || phones.length > 0) {
+                return {
+                  url: urlToScrape,
+                  name: extractBusinessName(markdown, metadata) || result.title || null,
+                  emails,
+                  phones,
+                  website: urlToScrape,
+                  address: extractAddress(markdown),
+                } as ScrapedLead;
+              }
+            }
+            return null;
+          } catch (e) {
+            console.log('Skipping URL due to timeout/error:', result.url);
+            return null;
+          }
+        });
+
+        const scrapeResults = await Promise.all(scrapePromises);
+        for (const lead of scrapeResults) {
+          if (lead) leads.push(lead);
         }
       }
+    } catch (fetchError) {
+      if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+        console.error('Request timed out after 20s');
+        clearTimeout(timeoutId);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Search timed out. Try a more specific query or use Scrape URL mode with a direct website.' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw fetchError;
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     console.log(`Found ${leads.length} leads with contact info`);
