@@ -10,6 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -43,6 +50,7 @@ export default function LeadFinder() {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
+  const [leadLimit, setLeadLimit] = useState<number>(5);
   const [loading, setLoading] = useState(false);
   const [leads, setLeads] = useState<ScrapedLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<number>>(new Set());
@@ -60,7 +68,7 @@ export default function LeadFinder() {
 
     try {
       const { data, error } = await supabase.functions.invoke('scrape-leads', {
-        body: { query: query.trim(), mode },
+        body: { query: query.trim(), mode, limit: leadLimit },
       });
 
       if (error) throw error;
@@ -199,6 +207,22 @@ export default function LeadFinder() {
                     />
                     <p className="text-xs text-muted-foreground">
                       Searches the web and extracts emails & phone numbers from results
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Number of Leads</Label>
+                    <Select value={String(leadLimit)} onValueChange={(v) => setLeadLimit(Number(v))}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5 leads</SelectItem>
+                        <SelectItem value="10">10 leads</SelectItem>
+                        <SelectItem value="50">50 leads (slower)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      More leads take longer to process
                     </p>
                   </div>
                 </TabsContent>

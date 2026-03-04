@@ -61,13 +61,65 @@ function extractAddress(text: string): string | null {
   return null;
 }
 
+// Scrape a single URL with its own timeout
+async function scrapeUrl(
+  url: string,
+  apiKey: string,
+  timeoutMs: number,
+  fallbackTitle: string | null
+): Promise<ScrapedLead | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+        onlyMainContent: false,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      const markdown = data.data?.markdown || data.markdown || '';
+      const metadata = data.data?.metadata || data.metadata || {};
+      const emails = extractEmails(markdown);
+      const phones = extractPhones(markdown);
+
+      if (emails.length > 0 || phones.length > 0) {
+        return {
+          url,
+          name: extractBusinessName(markdown, metadata) || fallbackTitle,
+          emails,
+          phones,
+          website: url,
+          address: extractAddress(markdown),
+        };
+      }
+    }
+    return null;
+  } catch {
+    console.log('Skipping URL (timeout/error):', url);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { query, mode } = await req.json();
+    const { query, mode, limit: requestedLimit } = await req.json();
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
       return new Response(
@@ -84,56 +136,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Validate and cap the limit
+    const limit = Math.min(Math.max(Number(requestedLimit) || 5, 1), 50);
+
     const leads: ScrapedLead[] = [];
 
-    // Use AbortController with 20s timeout to avoid edge function timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    if (mode === 'url') {
+      // Single URL scrape — straightforward
+      let url = query.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      console.log('Scraping single URL:', url);
 
-    try {
-      if (mode === 'url') {
-        let url = query.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-          url = `https://${url}`;
-        }
+      const lead = await scrapeUrl(url, apiKey, 20000, null);
+      if (lead) leads.push(lead);
+    } else {
+      // Search mode — adaptive strategy based on limit
+      console.log(`Searching for: "${query}" (limit: ${limit})`);
 
-        console.log('Scraping single URL:', url);
+      // Step 1: Fast search (no scraping) to get URLs
+      const searchController = new AbortController();
+      const searchTimeout = setTimeout(() => searchController.abort(), 12000);
 
-        const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url,
-            formats: ['markdown'],
-            onlyMainContent: false,
-          }),
-          signal: controller.signal,
-        });
-
-        const scrapeData = await scrapeRes.json();
-
-        if (scrapeRes.ok && scrapeData.success) {
-          const markdown = scrapeData.data?.markdown || scrapeData.markdown || '';
-          const metadata = scrapeData.data?.metadata || scrapeData.metadata || {};
-
-          leads.push({
-            url,
-            name: extractBusinessName(markdown, metadata),
-            emails: extractEmails(markdown),
-            phones: extractPhones(markdown),
-            website: url,
-            address: extractAddress(markdown),
-          });
-        } else {
-          console.error('Scrape failed:', scrapeData);
-        }
-      } else {
-        // Search mode - use Firecrawl search WITHOUT scraping content (much faster)
-        console.log('Searching for:', query);
-
+      let searchResults: any[] = [];
+      try {
         const searchRes = await fetch('https://api.firecrawl.dev/v1/search', {
           method: 'POST',
           headers: {
@@ -142,98 +169,74 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             query: query + ' contact email phone',
-            limit: 5,
+            limit: Math.min(limit * 2, 20), // Search more than needed since some won't have contacts
           }),
-          signal: controller.signal,
+          signal: searchController.signal,
         });
 
+        clearTimeout(searchTimeout);
         const searchData = await searchRes.json();
 
         if (!searchRes.ok) {
           console.error('Firecrawl search error:', searchData);
-          clearTimeout(timeoutId);
           return new Response(
             JSON.stringify({ success: false, error: searchData.error || `Search failed with status ${searchRes.status}` }),
             { status: searchRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        console.log('Search returned, now scraping top results individually...');
-        const results = searchData.data || [];
-
-        // Scrape each result URL individually with a short timeout per URL
-        const scrapePromises = results.slice(0, 3).map(async (result: any) => {
-          try {
-            const urlToScrape = result.url;
-            if (!urlToScrape) return null;
-
-            const perUrlController = new AbortController();
-            const perUrlTimeout = setTimeout(() => perUrlController.abort(), 8000);
-
-            const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                url: urlToScrape,
-                formats: ['markdown'],
-                onlyMainContent: false,
-              }),
-              signal: perUrlController.signal,
-            });
-
-            clearTimeout(perUrlTimeout);
-            const scrapeData = await scrapeRes.json();
-
-            if (scrapeRes.ok && scrapeData.success) {
-              const markdown = scrapeData.data?.markdown || scrapeData.markdown || '';
-              const metadata = scrapeData.data?.metadata || scrapeData.metadata || {};
-              const emails = extractEmails(markdown);
-              const phones = extractPhones(markdown);
-
-              if (emails.length > 0 || phones.length > 0) {
-                return {
-                  url: urlToScrape,
-                  name: extractBusinessName(markdown, metadata) || result.title || null,
-                  emails,
-                  phones,
-                  website: urlToScrape,
-                  address: extractAddress(markdown),
-                } as ScrapedLead;
-              }
-            }
-            return null;
-          } catch (e) {
-            console.log('Skipping URL due to timeout/error:', result.url);
-            return null;
-          }
-        });
-
-        const scrapeResults = await Promise.all(scrapePromises);
-        for (const lead of scrapeResults) {
-          if (lead) leads.push(lead);
-        }
-      }
-    } catch (fetchError) {
-      if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
-        console.error('Request timed out after 20s');
-        clearTimeout(timeoutId);
+        searchResults = searchData.data || [];
+        console.log(`Search returned ${searchResults.length} results`);
+      } catch (e) {
+        clearTimeout(searchTimeout);
+        console.error('Search timed out');
         return new Response(
-          JSON.stringify({ success: false, error: 'Search timed out. Try a more specific query or use Scrape URL mode with a direct website.' }),
+          JSON.stringify({ success: false, error: 'Search timed out. Try a more specific query.' }),
           { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      throw fetchError;
-    } finally {
-      clearTimeout(timeoutId);
+
+      if (searchResults.length === 0) {
+        return new Response(
+          JSON.stringify({ success: true, leads: [] }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Step 2: Scrape URLs in parallel batches with adaptive timeouts
+      // We have ~15s left after search. Process in batches of 5 to avoid overwhelming.
+      const BATCH_SIZE = 5;
+      const PER_URL_TIMEOUT = limit <= 5 ? 8000 : limit <= 10 ? 6000 : 4000;
+      const urlsToScrape = searchResults.filter((r: any) => r.url).slice(0, Math.min(limit * 2, 20));
+
+      console.log(`Scraping ${urlsToScrape.length} URLs in batches of ${BATCH_SIZE} (${PER_URL_TIMEOUT}ms timeout each)`);
+
+      for (let i = 0; i < urlsToScrape.length; i += BATCH_SIZE) {
+        // Stop early if we have enough leads
+        if (leads.length >= limit) break;
+
+        const batch = urlsToScrape.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map((result: any) =>
+          scrapeUrl(result.url, apiKey, PER_URL_TIMEOUT, result.title || null)
+        );
+
+        const batchResults = await Promise.allSettled(batchPromises);
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled' && result.value) {
+            leads.push(result.value);
+          }
+        }
+
+        console.log(`After batch ${Math.floor(i / BATCH_SIZE) + 1}: ${leads.length} leads found`);
+      }
     }
 
-    console.log(`Found ${leads.length} leads with contact info`);
+    // Trim to requested limit
+    const trimmedLeads = leads.slice(0, limit);
+    console.log(`Returning ${trimmedLeads.length} leads (requested: ${limit})`);
 
     return new Response(
-      JSON.stringify({ success: true, leads }),
+      JSON.stringify({ success: true, leads: trimmedLeads }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
