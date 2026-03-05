@@ -52,6 +52,7 @@ export default function CampaignDetail() {
   const [emailStats, setEmailStats] = useState<EmailStats>({ total: 0, sent: 0, pending: 0, failed: 0 });
   const [trackingStats, setTrackingStats] = useState<TrackingStats>({ opens: 0, clicks: 0, openRate: 0, clickRate: 0 });
   const [loading, setLoading] = useState(true);
+  const [failedErrors, setFailedErrors] = useState<string[]>([]);
 
   useEffect(() => {
     if (user && id) {
@@ -78,10 +79,10 @@ export default function CampaignDetail() {
       if (campaignError) throw campaignError;
       setCampaign(campaignData);
 
-      // Fetch email queue stats
+      // Fetch email queue stats with error details
       const { data: queueData } = await supabase
         .from('email_queue')
-        .select('status')
+        .select('status, error_log')
         .eq('campaign_id', id);
 
       if (queueData) {
@@ -92,6 +93,13 @@ export default function CampaignDetail() {
           failed: queueData.filter(e => e.status === 'failed').length,
         };
         setEmailStats(stats);
+        
+        // Collect unique error messages
+        const errors = queueData
+          .filter(e => e.status === 'failed' && e.error_log)
+          .map(e => e.error_log as string);
+        const uniqueErrors = [...new Set(errors)];
+        setFailedErrors(uniqueErrors);
       }
 
       // Fetch tracking stats
@@ -268,6 +276,17 @@ export default function CampaignDetail() {
                 {emailStats.failed} emails failed to send
               </CardDescription>
             </CardHeader>
+            {failedErrors.length > 0 && (
+              <CardContent>
+                <div className="space-y-2">
+                  {failedErrors.map((err, i) => (
+                    <div key={i} className="text-sm text-destructive bg-destructive/10 rounded p-3 font-mono break-all">
+                      {err}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            )}
           </Card>
         )}
 
