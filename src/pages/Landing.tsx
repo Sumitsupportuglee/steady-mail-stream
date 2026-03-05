@@ -265,23 +265,57 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Pricing */}
       <section id="pricing" className="py-24">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/5 p-12">
-            <Clock className="mx-auto h-10 w-10 text-primary" />
-            <h2 className="mt-6 text-3xl font-bold tracking-tight md:text-4xl">
-              Ready to Fill Your Pipeline?
+        <div className="mx-auto max-w-5xl px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+              Simple, Transparent Pricing
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Join agencies already using AgencyMail to book more meetings with less effort. Start
-              free — no credit card required.
+              Choose the plan that works for your agency. Cancel anytime.
             </p>
-            <Button size="lg" className="mt-8 h-12 px-10 text-base" asChild>
-              <Link to="/auth">
-                Get Started Free <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
+            {/* Monthly */}
+            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+              <h3 className="text-xl font-semibold">Monthly</h3>
+              <div className="mt-4">
+                <span className="text-4xl font-bold">₹2,499</span>
+                <span className="text-muted-foreground">/month</span>
+              </div>
+              <ul className="mt-6 space-y-3 text-left text-sm">
+                {['Unlimited email campaigns', 'Lead Finder with web scraping', 'Contact management', 'Open & click tracking', 'Domain verification', 'Real-time analytics'].map((f) => (
+                  <li key={f} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0" />{f}</li>
+                ))}
+              </ul>
+              <Button size="lg" variant="outline" className="w-full mt-8" asChild>
+                <Link to="/auth">Get Started</Link>
+              </Button>
+            </div>
+
+            {/* Yearly */}
+            <div className="relative rounded-2xl border-2 border-primary bg-card p-8 text-center shadow-lg">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
+                  Save ₹4,989
+                </span>
+              </div>
+              <h3 className="text-xl font-semibold">Yearly</h3>
+              <div className="mt-4">
+                <span className="text-4xl font-bold">₹24,999</span>
+                <span className="text-muted-foreground">/year</span>
+              </div>
+              <ul className="mt-6 space-y-3 text-left text-sm">
+                {['Everything in Monthly', '2 months free', 'Priority support', 'Dedicated onboarding', 'Unlimited email campaigns', 'Advanced analytics'].map((f) => (
+                  <li key={f} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0" />{f}</li>
+                ))}
+              </ul>
+              <Button size="lg" className="w-full mt-8" asChild>
+                <Link to="/auth">Get Started</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>

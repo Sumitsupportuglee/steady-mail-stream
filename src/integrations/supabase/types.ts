@@ -390,6 +390,59 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          plan: Database["public"]["Enums"]["subscription_plan_type"]
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["subscription_status_type"]
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          plan: Database["public"]["Enums"]["subscription_plan_type"]
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status_type"]
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan_type"]
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status_type"]
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -430,6 +483,8 @@ export type Database = {
       contact_status_type: "active" | "bounced" | "unsubscribed"
       domain_status_type: "unverified" | "verified"
       email_status_type: "pending" | "sent" | "failed"
+      subscription_plan_type: "monthly" | "yearly"
+      subscription_status_type: "active" | "expired" | "cancelled" | "pending"
       tier_type: "starter" | "growth"
     }
     CompositeTypes: {
@@ -563,6 +618,8 @@ export const Constants = {
       contact_status_type: ["active", "bounced", "unsubscribed"],
       domain_status_type: ["unverified", "verified"],
       email_status_type: ["pending", "sent", "failed"],
+      subscription_plan_type: ["monthly", "yearly"],
+      subscription_status_type: ["active", "expired", "cancelled", "pending"],
       tier_type: ["starter", "growth"],
     },
   },
