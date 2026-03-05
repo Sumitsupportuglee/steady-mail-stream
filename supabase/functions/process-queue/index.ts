@@ -64,27 +64,45 @@ class SmtpClient {
       })
     }
 
-    // EHLO after TLS
+    // EHLO after TLS - capture response to check supported auth methods
     await this.sendCommand(`EHLO localhost`)
-    await this.readMultilineResponse()
+    const ehloResp = await this.readMultilineResponse()
+    
+    // Detect supported AUTH methods from EHLO response
+    const authLine = ehloResp.split('\n').find(l => l.toUpperCase().includes('AUTH'))
+    const supportsPlain = authLine?.toUpperCase().includes('PLAIN') ?? false
+    const supportsLogin = authLine?.toUpperCase().includes('LOGIN') ?? false
+    
+    console.log(`SMTP AUTH methods available: ${authLine || 'none detected'}, using: ${supportsPlain ? 'PLAIN' : supportsLogin ? 'LOGIN' : 'LOGIN (default)'}`)
 
-    // AUTH LOGIN
-    await this.sendCommand(`AUTH LOGIN`)
-    const authResp = await this.readResponse()
-    if (!authResp.startsWith('334')) {
-      throw new Error(`AUTH LOGIN failed: ${authResp}`)
-    }
+    if (supportsPlain) {
+      // AUTH PLAIN
+      const authPlainStr = `\0${config.smtp_username}\0${config.smtp_password}`
+      const authPlainB64 = btoa(authPlainStr)
+      await this.sendCommand(`AUTH PLAIN ${authPlainB64}`)
+      const authResp = await this.readResponse()
+      if (!authResp.startsWith('235')) {
+        throw new Error(`AUTH PLAIN failed: ${authResp}`)
+      }
+    } else {
+      // AUTH LOGIN (default fallback)
+      await this.sendCommand(`AUTH LOGIN`)
+      const authResp = await this.readResponse()
+      if (!authResp.startsWith('334')) {
+        throw new Error(`AUTH LOGIN initiation failed: ${authResp}`)
+      }
 
-    await this.sendCommand(btoa(config.smtp_username))
-    const userResp = await this.readResponse()
-    if (!userResp.startsWith('334')) {
-      throw new Error(`Username rejected: ${userResp}`)
-    }
+      await this.sendCommand(btoa(config.smtp_username))
+      const userResp = await this.readResponse()
+      if (!userResp.startsWith('334')) {
+        throw new Error(`Username rejected: ${userResp}`)
+      }
 
-    await this.sendCommand(btoa(config.smtp_password))
-    const passResp = await this.readResponse()
-    if (!passResp.startsWith('235')) {
-      throw new Error(`Authentication failed: ${passResp}`)
+      await this.sendCommand(btoa(config.smtp_password))
+      const passResp = await this.readResponse()
+      if (!passResp.startsWith('235')) {
+        throw new Error(`Authentication failed: ${passResp}`)
+      }
     }
   }
 
@@ -192,28 +210,36 @@ async function updateCampaignStatuses(
   campaignIds: string[]
 ): Promise<void> {
   for (const campaignId of campaignIds) {
-    const { count: pendingCount, error: pendingError } = await supabase
+    const { count: pendingCount } = await supabase
       .from('email_queue')
       .select('id', { count: 'exact', head: true })
       .eq('campaign_id', campaignId)
       .eq('status', 'pending')
 
-    if (pendingError) {
-      console.error(`Failed to count pending emails for campaign ${campaignId}:`, pendingError)
-      continue
-    }
+    const { count: sentCount } = await supabase
+      .from('email_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('campaign_id', campaignId)
+      .eq('status', 'sent')
 
     const pending = pendingCount ?? 0
-    const newStatus = pending === 0 ? 'completed' : 'sending'
+    const sent = sentCount ?? 0
 
-    const { error: updateError } = await supabase
+    // Only mark completed if no pending AND at least one was sent
+    let newStatus: string
+    if (pending > 0) {
+      newStatus = 'sending'
+    } else if (sent > 0) {
+      newStatus = 'completed'
+    } else {
+      // All failed, no sent, no pending
+      newStatus = 'completed'
+    }
+
+    await supabase
       .from('campaigns')
       .update({ status: newStatus })
       .eq('id', campaignId)
-
-    if (updateError) {
-      console.error(`Failed to update campaign ${campaignId} status to ${newStatus}:`, updateError)
-    }
   }
 }
 
