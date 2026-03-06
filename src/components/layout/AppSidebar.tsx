@@ -51,7 +51,7 @@ export function AppSidebar() {
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <Mail className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-lg">AgencyMail</span>
+          <span className="font-semibold text-lg">Senddot</span>
         </div>
       </SidebarHeader>
 
