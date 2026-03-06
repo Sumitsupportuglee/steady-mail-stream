@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ interface Campaign {
 
 export default function Campaigns() {
   const { user } = useAuth();
+  const { isActive, loading: subLoading } = useSubscription();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -119,6 +121,23 @@ export default function Campaigns() {
       <AppLayout>
         <div className="flex items-center justify-center h-full">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!subLoading && !isActive) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+          <Send className="h-16 w-16 text-muted-foreground" />
+          <h2 className="text-2xl font-bold">Subscription Required</h2>
+          <p className="text-muted-foreground max-w-md">
+            Email campaigns are available for subscribers only. Upgrade your plan to start sending.
+          </p>
+          <Button asChild>
+            <Link to="/pricing">View Plans</Link>
+          </Button>
         </div>
       </AppLayout>
     );
