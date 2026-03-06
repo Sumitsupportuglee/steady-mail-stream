@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +50,7 @@ interface ScrapedLead {
 
 export default function LeadFinder() {
   const { user } = useAuth();
+  const { isActive, loading: subLoading } = useSubscription();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
   const [leadLimit, setLeadLimit] = useState<number>(5);
@@ -160,6 +163,23 @@ export default function LeadFinder() {
       setSaving(false);
     }
   };
+
+  if (!subLoading && !isActive) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+          <Search className="h-16 w-16 text-muted-foreground" />
+          <h2 className="text-2xl font-bold">Subscription Required</h2>
+          <p className="text-muted-foreground max-w-md">
+            Lead Finder is available for subscribers only. Upgrade your plan to discover business contacts.
+          </p>
+          <Button asChild>
+            <Link to="/pricing">View Plans</Link>
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

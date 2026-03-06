@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.scrape-leads]
 verify_jwt = false
+
+[functions.razorpay]
+verify_jwt = false
