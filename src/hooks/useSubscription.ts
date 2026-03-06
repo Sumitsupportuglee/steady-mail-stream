@@ -11,13 +11,32 @@ interface Subscription {
   expires_at: string | null;
 }
 
+// Demo accounts that get free access to all features
+const DEMO_ACCOUNTS = ['admin@personacraft.in'];
+
 export function useSubscription() {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isDemoAccount = user?.email ? DEMO_ACCOUNTS.includes(user.email) : false;
+
   const fetchSubscription = async () => {
     if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Demo accounts always have active subscription
+    if (isDemoAccount) {
+      setSubscription({
+        id: 'demo',
+        plan: 'yearly',
+        status: 'active',
+        amount: 0,
+        started_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      });
       setLoading(false);
       return;
     }
@@ -32,7 +51,6 @@ export function useSubscription() {
         .limit(1)
         .maybeSingle();
 
-      // Check if expired
       if (data && data.expires_at && new Date(data.expires_at) < new Date()) {
         setSubscription(null);
       } else {

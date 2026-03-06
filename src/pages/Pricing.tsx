@@ -97,7 +97,7 @@ export default function Pricing() {
         key: data.key_id,
         amount: data.amount,
         currency: data.currency,
-        name: 'AgencyMail',
+        name: 'Senddot',
         description: `${plan === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
         order_id: data.order_id,
         handler: async (response: any) => {

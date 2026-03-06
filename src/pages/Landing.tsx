@@ -95,7 +95,7 @@ export default function Landing() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
               <Mail className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">AgencyMail</span>
+            <span className="text-xl font-bold tracking-tight">Senddot</span>
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">
@@ -148,7 +148,7 @@ export default function Landing() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
-            AgencyMail gives you everything you need to find leads, build campaigns, and land in the
+            Senddot gives you everything you need to find leads, build campaigns, and land in the
             primary inbox — all from one dashboard.
           </p>
 
@@ -183,7 +183,7 @@ export default function Landing() {
               Everything You Need to Scale Outreach
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-              From lead generation to campaign analytics — AgencyMail is the all-in-one cold email
+              From lead generation to campaign analytics — Senddot is the all-in-one cold email
               platform built for agencies and sales teams.
             </p>
           </div>
@@ -243,7 +243,7 @@ export default function Landing() {
             Built for Deliverability
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-            AgencyMail handles domain verification, DKIM setup, and rate limiting so your emails
+            Senddot handles domain verification, DKIM setup, and rate limiting so your emails
             land in the primary inbox — not spam.
           </p>
 
@@ -327,10 +327,13 @@ export default function Landing() {
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
               <Mail className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold">AgencyMail</span>
+            <span className="font-semibold">Senddot</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms & Conditions</Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} AgencyMail. All rights reserved.
+            © {new Date().getFullYear()} Senddot by OdishaBajar.com. All rights reserved.
           </p>
         </div>
       </footer>

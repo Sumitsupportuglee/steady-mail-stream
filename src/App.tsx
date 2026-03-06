@@ -19,6 +19,7 @@ import Settings from "./pages/Settings";
 import LeadFinder from "./pages/LeadFinder";
 import Pricing from "./pages/Pricing";
 import Landing from "./pages/Landing";
+import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 
 // Admin Pages
@@ -156,6 +157,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            
+            <Route path="/terms" element={<Terms />} />
             
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
