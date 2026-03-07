@@ -104,7 +104,7 @@ export default function Terms() {
 
         <h2 className="text-xl font-semibold mt-8">14. Contact Us</h2>
         <p>If you have any questions about these Terms, please contact us at:</p>
-        <p className="font-medium">Email: support@odishabajar.com</p>
+        <p className="font-medium">Email: ssingh2100.2100@gmail.com</p>
 
         <div className="mt-12 border-t border-border pt-8">
           <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Senddot by OdishaBajar.com. All rights reserved.</p>
