@@ -235,6 +235,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Review Form */}
+        <ReviewForm />
       </div>
     </AppLayout>
   );
