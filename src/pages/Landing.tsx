@@ -266,6 +266,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Reviews */}
+      <ReviewsSection />
+
       {/* Pricing */}
       <section id="pricing" className="py-24">
         <div className="mx-auto max-w-5xl px-6">
