@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { Button } from '@/components/ui/button';
 import {
   Mail,
@@ -264,6 +265,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Reviews */}
+      <ReviewsSection />
 
       {/* Pricing */}
       <section id="pricing" className="py-24">
