@@ -40,6 +40,7 @@ interface SenderIdentity {
 
 export default function SenderIdentities() {
   const { user } = useAuth();
+  const { activeClientId } = useClient();
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
