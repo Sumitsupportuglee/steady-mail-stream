@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -26,6 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import {
   Search,
@@ -37,6 +46,9 @@ import {
   UserPlus,
   Building2,
   ExternalLink,
+  Sparkles,
+  Copy,
+  Send,
 } from 'lucide-react';
 
 interface ScrapedLead {
@@ -48,8 +60,21 @@ interface ScrapedLead {
   address: string | null;
 }
 
+interface GeneratedEmail {
+  subject: string;
+  body: string;
+}
+
+const TONE_OPTIONS = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'friendly', label: 'Friendly' },
+  { value: 'sales', label: 'Sales-focused' },
+  { value: 'casual', label: 'Casual' },
+];
+
 export default function LeadFinder() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { isActive, loading: subLoading } = useSubscription();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
@@ -59,6 +84,15 @@ export default function LeadFinder() {
   const [selectedLeads, setSelectedLeads] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Email generation state
+  const [generatingIdx, setGeneratingIdx] = useState<number | null>(null);
+  const [selectedTone, setSelectedTone] = useState('professional');
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [generatedEmail, setGeneratedEmail] = useState<GeneratedEmail | null>(null);
+  const [activeLead, setActiveLead] = useState<ScrapedLead | null>(null);
+  const [editableSubject, setEditableSubject] = useState('');
+  const [editableBody, setEditableBody] = useState('');
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,23 +114,13 @@ export default function LeadFinder() {
       setLeads(data.leads || []);
 
       if (data.leads?.length === 0) {
-        toast({
-          title: 'No leads found',
-          description: 'Try a different search query or URL.',
-        });
+        toast({ title: 'No leads found', description: 'Try a different search query or URL.' });
       } else {
-        toast({
-          title: 'Leads found',
-          description: `Found ${data.leads.length} leads with contact information.`,
-        });
+        toast({ title: 'Leads found', description: `Found ${data.leads.length} leads with contact information.` });
       }
     } catch (error: any) {
       console.error('Search error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to search for leads',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to search for leads', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -104,20 +128,14 @@ export default function LeadFinder() {
 
   const toggleSelect = (index: number) => {
     const updated = new Set(selectedLeads);
-    if (updated.has(index)) {
-      updated.delete(index);
-    } else {
-      updated.add(index);
-    }
+    if (updated.has(index)) updated.delete(index);
+    else updated.add(index);
     setSelectedLeads(updated);
   };
 
   const toggleSelectAll = () => {
-    if (selectedLeads.size === leads.length) {
-      setSelectedLeads(new Set());
-    } else {
-      setSelectedLeads(new Set(leads.map((_, i) => i)));
-    }
+    if (selectedLeads.size === leads.length) setSelectedLeads(new Set());
+    else setSelectedLeads(new Set(leads.map((_, i) => i)));
   };
 
   const handleSaveToContacts = async () => {
@@ -130,7 +148,6 @@ export default function LeadFinder() {
     try {
       const contacts = Array.from(selectedLeads).flatMap((idx) => {
         const lead = leads[idx];
-        // Create a contact for each email found
         return lead.emails.map((email) => ({
           user_id: user!.id,
           email,
@@ -148,20 +165,62 @@ export default function LeadFinder() {
       const { error } = await supabase.from('contacts').insert(contacts);
       if (error) throw error;
 
-      toast({
-        title: 'Contacts saved',
-        description: `${contacts.length} contact(s) added successfully.`,
-      });
+      toast({ title: 'Contacts saved', description: `${contacts.length} contact(s) added successfully.` });
       setSelectedLeads(new Set());
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to save contacts',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to save contacts', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleGenerateEmail = async (lead: ScrapedLead, idx: number) => {
+    setGeneratingIdx(idx);
+    setActiveLead(lead);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-outreach', {
+        body: {
+          websiteUrl: lead.url || lead.website,
+          businessName: lead.name,
+          emails: lead.emails,
+          tone: selectedTone,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Email generation failed');
+
+      const email = data.email as GeneratedEmail;
+      setGeneratedEmail(email);
+      setEditableSubject(email.subject);
+      setEditableBody(email.body);
+      setEmailDialogOpen(true);
+    } catch (error: any) {
+      console.error('Email generation error:', error);
+      toast({ title: 'Error', description: error.message || 'Failed to generate email', variant: 'destructive' });
+    } finally {
+      setGeneratingIdx(null);
+    }
+  };
+
+  const handleCopyEmail = () => {
+    const fullEmail = `Subject: ${editableSubject}\n\n${editableBody}`;
+    navigator.clipboard.writeText(fullEmail);
+    toast({ title: 'Copied!', description: 'Email copied to clipboard.' });
+  };
+
+  const handleCreateCampaign = () => {
+    // Save lead + email to session storage for the campaign wizard to pick up
+    const campaignDraft = {
+      subject: editableSubject,
+      bodyHtml: `<p>${editableBody.replace(/\n/g, '</p><p>')}</p>`,
+      recipientEmail: activeLead?.emails?.[0],
+      recipientName: activeLead?.name,
+    };
+    sessionStorage.setItem('outreach_draft', JSON.stringify(campaignDraft));
+    setEmailDialogOpen(false);
+    navigate('/campaigns/new');
   };
 
   if (!subLoading && !isActive) {
@@ -262,19 +321,21 @@ export default function LeadFinder() {
                   </div>
                 </TabsContent>
 
-                <Button type="submit" disabled={loading || !query.trim()} className="mt-4">
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Find Leads
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-end gap-4 mt-4">
+                  <Button type="submit" disabled={loading || !query.trim()}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Find Leads
+                      </>
+                    )}
+                  </Button>
+                </div>
               </form>
             </Tabs>
           </CardContent>
@@ -284,26 +345,44 @@ export default function LeadFinder() {
         {(leads.length > 0 || (hasSearched && !loading)) && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <CardTitle>Results</CardTitle>
                   <CardDescription>
                     {leads.length} lead(s) found with contact information
                   </CardDescription>
                 </div>
-                {leads.length > 0 && (
-                  <Button
-                    onClick={handleSaveToContacts}
-                    disabled={selectedLeads.size === 0 || saving}
-                  >
-                    {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <UserPlus className="mr-2 h-4 w-4" />
-                    )}
-                    Save {selectedLeads.size > 0 ? `${selectedLeads.size} ` : ''}to Contacts
-                  </Button>
-                )}
+                <div className="flex items-center gap-3">
+                  {leads.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs whitespace-nowrap">Outreach Tone</Label>
+                        <Select value={selectedTone} onValueChange={setSelectedTone}>
+                          <SelectTrigger className="w-[140px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TONE_OPTIONS.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        onClick={handleSaveToContacts}
+                        disabled={selectedLeads.size === 0 || saving}
+                        size="sm"
+                      >
+                        {saving ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserPlus className="mr-2 h-4 w-4" />
+                        )}
+                        Save {selectedLeads.size > 0 ? `${selectedLeads.size} ` : ''}to Contacts
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -326,7 +405,7 @@ export default function LeadFinder() {
                       <TableHead>Emails</TableHead>
                       <TableHead>Phones</TableHead>
                       <TableHead>Location</TableHead>
-                      <TableHead>Source</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -388,17 +467,32 @@ export default function LeadFinder() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {lead.url && (
-                            <a
-                              href={lead.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleGenerateEmail(lead, idx)}
+                              disabled={generatingIdx !== null}
+                              className="gap-1 text-xs"
                             >
-                              <ExternalLink className="h-3 w-3" />
-                              Visit
-                            </a>
-                          )}
+                              {generatingIdx === idx ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-3.5 w-3.5" />
+                              )}
+                              {generatingIdx === idx ? 'Generating...' : 'AI Email'}
+                            </Button>
+                            {lead.url && (
+                              <a
+                                href={lead.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline flex items-center gap-1 px-2"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -409,6 +503,51 @@ export default function LeadFinder() {
           </Card>
         )}
       </div>
+
+      {/* Generated Email Dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Generated Outreach Email
+            </DialogTitle>
+            <DialogDescription>
+              Personalized for {activeLead?.name || 'this business'}. Edit as needed.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Subject</Label>
+              <Input
+                value={editableSubject}
+                onChange={(e) => setEditableSubject(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Body</Label>
+              <Textarea
+                value={editableBody}
+                onChange={(e) => setEditableBody(e.target.value)}
+                rows={10}
+                className="resize-y"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={handleCopyEmail} className="gap-2">
+              <Copy className="h-4 w-4" />
+              Copy to Clipboard
+            </Button>
+            <Button onClick={handleCreateCampaign} className="gap-2">
+              <Send className="h-4 w-4" />
+              Create Campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
