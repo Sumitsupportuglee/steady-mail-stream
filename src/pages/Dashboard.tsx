@@ -187,12 +187,22 @@ export default function Dashboard() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Click Rate</CardTitle>
-              <MousePointerClick className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Reply Rate</CardTitle>
+              <MessageSquareReply className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{stats.clickRate}%</div>
-              <p className="text-xs text-muted-foreground mt-1">Average click rate</p>
+              <div className="text-3xl font-bold">{stats.replyRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Coming soon</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{stats.conversionRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Based on link clicks</p>
             </CardContent>
           </Card>
         </div>
