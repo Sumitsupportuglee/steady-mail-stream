@@ -42,7 +42,7 @@ interface RecentCampaign {
 export default function Dashboard() {
   const { user } = useAuth();
   const { isActive, subscription, daysRemaining, loading: subLoading } = useSubscription();
-  const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, clickRate: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
 
