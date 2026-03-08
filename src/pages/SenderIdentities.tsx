@@ -55,7 +55,7 @@ export default function SenderIdentities() {
     if (user) {
       fetchIdentities();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchIdentities = async () => {
     try {
