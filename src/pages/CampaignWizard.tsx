@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -47,6 +48,7 @@ type WizardStep = 1 | 2 | 3;
 export default function CampaignWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { activeClientId } = useClient();
   const [step, setStep] = useState<WizardStep>(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,17 +72,20 @@ export default function CampaignWizard() {
 
   const fetchData = async () => {
     try {
-      const [contactsRes, identitiesRes] = await Promise.all([
-        supabase
-          .from('contacts')
-          .select('id, email, name')
-          .eq('user_id', user!.id)
-          .eq('status', 'active'),
-        supabase
-          .from('sender_identities')
-          .select('id, from_name, from_email, domain_status')
-          .eq('user_id', user!.id),
-      ]);
+      let contactsQuery = supabase
+        .from('contacts')
+        .select('id, email, name')
+        .eq('user_id', user!.id)
+        .eq('status', 'active');
+      if (activeClientId) contactsQuery = contactsQuery.eq('client_id', activeClientId);
+
+      let identitiesQuery = supabase
+        .from('sender_identities')
+        .select('id, from_name, from_email, domain_status')
+        .eq('user_id', user!.id);
+      if (activeClientId) identitiesQuery = identitiesQuery.eq('client_id', activeClientId);
+
+      const [contactsRes, identitiesRes] = await Promise.all([contactsQuery, identitiesQuery]);
 
       if (contactsRes.error) throw contactsRes.error;
       if (identitiesRes.error) throw identitiesRes.error;
@@ -138,6 +143,7 @@ export default function CampaignWizard() {
           body_html: bodyHtml,
           status: 'queued',
           recipient_count: recipients.length,
+          client_id: activeClientId,
         })
         .select()
         .single();

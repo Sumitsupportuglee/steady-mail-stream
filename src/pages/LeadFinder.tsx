@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 import {
   Search,
   Globe,
@@ -75,6 +76,7 @@ const TONE_OPTIONS = [
 export default function LeadFinder() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { activeClientId } = useClient();
   const { isActive, loading: subLoading } = useSubscription();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
@@ -153,6 +155,7 @@ export default function LeadFinder() {
           email,
           name: lead.name || null,
           status: 'active' as const,
+          client_id: activeClientId,
         }));
       });
 

@@ -27,6 +27,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useClient } from '@/contexts/ClientContext';
 
 interface SenderIdentity {
   id: string;
@@ -39,6 +40,7 @@ interface SenderIdentity {
 
 export default function SenderIdentities() {
   const { user } = useAuth();
+  const { activeClientId } = useClient();
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -54,15 +56,16 @@ export default function SenderIdentities() {
     if (user) {
       fetchIdentities();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchIdentities = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('sender_identities')
         .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user!.id);
+      if (activeClientId) query = query.eq('client_id', activeClientId);
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setIdentities(data || []);
@@ -99,6 +102,7 @@ export default function SenderIdentities() {
           from_email: fromEmail,
           dkim_record: dkimRecord,
           domain_status: 'unverified',
+          client_id: activeClientId,
         });
 
       if (error) throw error;

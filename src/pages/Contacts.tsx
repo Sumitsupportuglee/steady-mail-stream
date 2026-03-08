@@ -45,6 +45,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import Papa from 'papaparse';
+import { useClient } from '@/contexts/ClientContext';
 
 interface Contact {
   id: string;
@@ -62,6 +63,7 @@ interface CSVRow {
 
 export default function Contacts() {
   const { user } = useAuth();
+  const { activeClientId } = useClient();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,15 +89,16 @@ export default function Contacts() {
     if (user) {
       fetchContacts();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchContacts = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('contacts')
         .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user!.id);
+      if (activeClientId) query = query.eq('client_id', activeClientId);
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setContacts(data || []);
@@ -121,6 +124,7 @@ export default function Contacts() {
         email: newEmail,
         name: newName || null,
         status: 'active',
+        client_id: activeClientId,
       });
 
       if (error) throw error;
@@ -232,6 +236,7 @@ export default function Contacts() {
         email: row[emailColumn].trim(),
         name: nameColumn ? row[nameColumn]?.trim() || null : null,
         status: 'active' as const,
+        client_id: activeClientId,
       }));
 
     const batchSize = 100;

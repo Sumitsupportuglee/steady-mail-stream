@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Send, Loader2, Eye, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 
 interface Campaign {
   id: string;
@@ -36,6 +37,7 @@ interface Campaign {
 export default function Campaigns() {
   const { user } = useAuth();
   const { isActive, loading: subLoading } = useSubscription();
+  const { activeClientId } = useClient();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -44,15 +46,16 @@ export default function Campaigns() {
     if (user) {
       fetchCampaigns();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchCampaigns = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('campaigns')
         .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user!.id);
+      if (activeClientId) query = query.eq('client_id', activeClientId);
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setCampaigns(data || []);

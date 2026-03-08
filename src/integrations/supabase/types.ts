@@ -17,6 +17,7 @@ export type Database = {
       campaigns: {
         Row: {
           body_html: string | null
+          client_id: string | null
           created_at: string | null
           id: string
           recipient_count: number | null
@@ -28,6 +29,7 @@ export type Database = {
         }
         Insert: {
           body_html?: string | null
+          client_id?: string | null
           created_at?: string | null
           id?: string
           recipient_count?: number | null
@@ -39,6 +41,7 @@ export type Database = {
         }
         Update: {
           body_html?: string | null
+          client_id?: string | null
           created_at?: string | null
           id?: string
           recipient_count?: number | null
@@ -49,6 +52,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "campaigns_sender_identity_id_fkey"
             columns: ["sender_identity_id"]
@@ -65,8 +75,56 @@ export type Database = {
           },
         ]
       }
+      clients: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          smtp_encryption: string | null
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_username: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          smtp_encryption?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          smtp_encryption?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_username?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
+          client_id: string | null
           created_at: string | null
           email: string
           id: string
@@ -76,6 +134,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_id?: string | null
           created_at?: string | null
           email: string
           id?: string
@@ -85,6 +144,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_id?: string | null
           created_at?: string | null
           email?: string
           id?: string
@@ -94,6 +154,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_user_id_fkey"
             columns: ["user_id"]
@@ -372,6 +439,7 @@ export type Database = {
       }
       sender_identities: {
         Row: {
+          client_id: string | null
           created_at: string | null
           dkim_record: string | null
           domain_status:
@@ -384,6 +452,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_id?: string | null
           created_at?: string | null
           dkim_record?: string | null
           domain_status?:
@@ -396,6 +465,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_id?: string | null
           created_at?: string | null
           dkim_record?: string | null
           domain_status?:
@@ -408,6 +478,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sender_identities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sender_identities_user_id_fkey"
             columns: ["user_id"]
