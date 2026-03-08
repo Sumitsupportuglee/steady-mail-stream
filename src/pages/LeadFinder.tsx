@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 import {
   Search,
   Globe,
