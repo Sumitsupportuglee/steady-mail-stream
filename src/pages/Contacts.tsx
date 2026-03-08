@@ -63,6 +63,7 @@ interface CSVRow {
 
 export default function Contacts() {
   const { user } = useAuth();
+  const { activeClientId } = useClient();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
