@@ -48,6 +48,7 @@ type WizardStep = 1 | 2 | 3;
 export default function CampaignWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { activeClientId } = useClient();
   const [step, setStep] = useState<WizardStep>(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
