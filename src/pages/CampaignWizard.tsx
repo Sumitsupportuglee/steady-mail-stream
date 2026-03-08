@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 import { 
   ArrowLeft, 
   ArrowRight, 
