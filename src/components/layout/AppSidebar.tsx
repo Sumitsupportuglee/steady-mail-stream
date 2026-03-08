@@ -45,6 +45,7 @@ const mainNavItems = [
   { title: 'Sender Identities', url: '/identities', icon: Mail },
   { title: 'Contacts', url: '/contacts', icon: Users },
   { title: 'Campaigns', url: '/campaigns', icon: Send },
+  { title: 'CRM', url: '/crm', icon: Kanban },
   { title: 'Client Report', url: '/client-report', icon: BarChart3 },
 ];
 
