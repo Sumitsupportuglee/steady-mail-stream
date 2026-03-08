@@ -20,12 +20,15 @@ import {
   Loader2,
   AlertTriangle,
   CalendarDays,
+  MessageSquareReply,
+  TrendingUp,
 } from 'lucide-react';
 
 interface DashboardStats {
   emailsSent: number;
   openRate: number;
-  clickRate: number;
+  replyRate: number;
+  conversionRate: number;
 }
 
 interface RecentCampaign {
@@ -39,7 +42,7 @@ interface RecentCampaign {
 export default function Dashboard() {
   const { user } = useAuth();
   const { isActive, subscription, daysRemaining, loading: subLoading } = useSubscription();
-  const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, clickRate: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,7 +70,8 @@ export default function Dashboard() {
       setStats({
         emailsSent: emailsSentRes.count || 0,
         openRate: Math.round(openRate * 10) / 10,
-        clickRate: Math.round(clickRate * 10) / 10,
+        replyRate: 0, // Reply tracking coming soon
+        conversionRate: Math.round(clickRate * 10) / 10,
       });
       setRecentCampaigns(campaignsRes.data || []);
     } catch (error) {
@@ -160,7 +164,7 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Emails Sent</CardTitle>
@@ -183,12 +187,22 @@ export default function Dashboard() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Click Rate</CardTitle>
-              <MousePointerClick className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Reply Rate</CardTitle>
+              <MessageSquareReply className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{stats.clickRate}%</div>
-              <p className="text-xs text-muted-foreground mt-1">Average click rate</p>
+              <div className="text-3xl font-bold">{stats.replyRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Coming soon</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{stats.conversionRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Based on link clicks</p>
             </CardContent>
           </Card>
         </div>
