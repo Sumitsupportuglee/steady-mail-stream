@@ -773,6 +773,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_master_directory_categories: {
+        Args: never
+        Returns: {
+          category: string
+          latest_entry: string
+          lead_count: number
+          unique_emails: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
