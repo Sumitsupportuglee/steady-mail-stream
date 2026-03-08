@@ -89,7 +89,7 @@ export default function Contacts() {
     if (user) {
       fetchContacts();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchContacts = async () => {
     try {
