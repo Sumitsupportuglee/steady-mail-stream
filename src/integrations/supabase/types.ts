@@ -508,6 +508,45 @@ export type Database = {
           },
         ]
       }
+      master_business_directory: {
+        Row: {
+          address: string | null
+          business_name: string | null
+          contributed_by: string
+          created_at: string
+          emails: string[]
+          id: string
+          phones: string[]
+          search_query: string | null
+          source_url: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          business_name?: string | null
+          contributed_by: string
+          created_at?: string
+          emails?: string[]
+          id?: string
+          phones?: string[]
+          search_query?: string | null
+          source_url?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          business_name?: string | null
+          contributed_by?: string
+          created_at?: string
+          emails?: string[]
+          id?: string
+          phones?: string[]
+          search_query?: string | null
+          source_url?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
