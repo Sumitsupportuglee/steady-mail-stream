@@ -27,6 +27,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useClient } from '@/contexts/ClientContext';
 
 interface SenderIdentity {
   id: string;
