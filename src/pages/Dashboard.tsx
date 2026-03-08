@@ -20,6 +20,8 @@ import {
   Loader2,
   AlertTriangle,
   CalendarDays,
+  MessageSquareReply,
+  TrendingUp,
 } from 'lucide-react';
 
 interface DashboardStats {
