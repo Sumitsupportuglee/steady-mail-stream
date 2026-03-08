@@ -132,7 +132,7 @@ export default function LeadFinder() {
 
       if (searchErr) console.error('Failed to save search:', searchErr);
 
-      // Save leads to business directory
+      // Save leads to user's business directory
       if (foundLeads.length > 0 && searchRecord) {
         const directoryEntries = foundLeads.map((lead) => ({
           user_id: user!.id,
@@ -151,6 +151,24 @@ export default function LeadFinder() {
           .insert(directoryEntries);
 
         if (dirErr) console.error('Failed to save to directory:', dirErr);
+
+        // Also save to master business directory (admin-only view)
+        const masterEntries = foundLeads.map((lead) => ({
+          contributed_by: user!.id,
+          business_name: lead.name || null,
+          website: lead.website || null,
+          emails: lead.emails,
+          phones: lead.phones,
+          address: lead.address || null,
+          source_url: lead.url || null,
+          search_query: query.trim(),
+        }));
+
+        const { error: masterErr } = await supabase
+          .from('master_business_directory')
+          .insert(masterEntries);
+
+        if (masterErr) console.error('Failed to save to master directory:', masterErr);
       }
 
       if (foundLeads.length === 0) {
