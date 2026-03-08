@@ -76,6 +76,7 @@ const TONE_OPTIONS = [
 export default function LeadFinder() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { activeClientId } = useClient();
   const { isActive, loading: subLoading } = useSubscription();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
