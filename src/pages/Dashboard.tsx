@@ -70,7 +70,8 @@ export default function Dashboard() {
       setStats({
         emailsSent: emailsSentRes.count || 0,
         openRate: Math.round(openRate * 10) / 10,
-        clickRate: Math.round(clickRate * 10) / 10,
+        replyRate: 0, // Reply tracking coming soon
+        conversionRate: Math.round(clickRate * 10) / 10,
       });
       setRecentCampaigns(campaignsRes.data || []);
     } catch (error) {
