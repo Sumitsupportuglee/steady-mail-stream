@@ -103,6 +103,20 @@ export default function CRM() {
 
   useEffect(() => {
     fetchLeads();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('crm-leads-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'crm_leads' },
+        () => fetchLeads()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchLeads]);
 
   const resetForm = () => {
