@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      business_directory: {
+        Row: {
+          address: string | null
+          business_name: string | null
+          client_id: string | null
+          created_at: string
+          emails: string[]
+          id: string
+          phones: string[]
+          search_id: string | null
+          source_url: string | null
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          business_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          emails?: string[]
+          id?: string
+          phones?: string[]
+          search_id?: string | null
+          source_url?: string | null
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          business_name?: string | null
+          client_id?: string | null
+          created_at?: string
+          emails?: string[]
+          id?: string
+          phones?: string[]
+          search_id?: string | null
+          source_url?: string | null
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_directory_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_directory_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "lead_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           body_html: string | null
@@ -406,6 +463,47 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_searches: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          lead_limit: number
+          mode: string
+          query: string
+          results_count: number
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          lead_limit?: number
+          mode?: string
+          query: string
+          results_count?: number
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          lead_limit?: number
+          mode?: string
+          query?: string
+          results_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_searches_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
