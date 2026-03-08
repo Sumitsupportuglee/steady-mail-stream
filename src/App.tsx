@@ -31,6 +31,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import SESIdentities from "./pages/admin/SESIdentities";
 import RateLimits from "./pages/admin/RateLimits";
+import MasterDirectory from "./pages/admin/MasterDirectory";
 
 const queryClient = new QueryClient();
 
