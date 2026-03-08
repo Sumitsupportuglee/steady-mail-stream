@@ -37,6 +37,7 @@ interface Campaign {
 export default function Campaigns() {
   const { user } = useAuth();
   const { isActive, loading: subLoading } = useSubscription();
+  const { activeClientId } = useClient();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -45,7 +46,7 @@ export default function Campaigns() {
     if (user) {
       fetchCampaigns();
     }
-  }, [user]);
+  }, [user, activeClientId]);
 
   const fetchCampaigns = async () => {
     try {
