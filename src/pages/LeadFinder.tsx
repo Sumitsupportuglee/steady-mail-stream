@@ -113,12 +113,50 @@ export default function LeadFinder() {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Scraping failed');
 
-      setLeads(data.leads || []);
+      const foundLeads: ScrapedLead[] = data.leads || [];
+      setLeads(foundLeads);
 
-      if (data.leads?.length === 0) {
+      // Save search to database
+      const { data: searchRecord, error: searchErr } = await supabase
+        .from('lead_searches')
+        .insert({
+          user_id: user!.id,
+          client_id: activeClientId,
+          query: query.trim(),
+          mode,
+          lead_limit: leadLimit,
+          results_count: foundLeads.length,
+        })
+        .select('id')
+        .single();
+
+      if (searchErr) console.error('Failed to save search:', searchErr);
+
+      // Save leads to business directory
+      if (foundLeads.length > 0 && searchRecord) {
+        const directoryEntries = foundLeads.map((lead) => ({
+          user_id: user!.id,
+          client_id: activeClientId,
+          search_id: searchRecord.id,
+          business_name: lead.name || null,
+          website: lead.website || null,
+          emails: lead.emails,
+          phones: lead.phones,
+          address: lead.address || null,
+          source_url: lead.url || null,
+        }));
+
+        const { error: dirErr } = await supabase
+          .from('business_directory')
+          .insert(directoryEntries);
+
+        if (dirErr) console.error('Failed to save to directory:', dirErr);
+      }
+
+      if (foundLeads.length === 0) {
         toast({ title: 'No leads found', description: 'Try a different search query or URL.' });
       } else {
-        toast({ title: 'Leads found', description: `Found ${data.leads.length} leads with contact information.` });
+        toast({ title: 'Leads found', description: `Found ${foundLeads.length} leads with contact information.` });
       }
     } catch (error: any) {
       console.error('Search error:', error);
