@@ -8,11 +8,14 @@ import {
   Shield,
   SearchCheck,
   CreditCard,
+  Building2,
+  BarChart3,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminCheck } from '@/hooks/useAdminCheck';
+import { useClient } from '@/contexts/ClientContext';
 import {
   Sidebar,
   SidebarContent,
@@ -25,14 +28,23 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from '@/components/ui/sidebar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
 const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Clients', url: '/clients', icon: Building2 },
   { title: 'Lead Finder', url: '/leads', icon: SearchCheck },
   { title: 'Sender Identities', url: '/identities', icon: Mail },
   { title: 'Contacts', url: '/contacts', icon: Users },
   { title: 'Campaigns', url: '/campaigns', icon: Send },
+  { title: 'Client Report', url: '/client-report', icon: BarChart3 },
 ];
 
 const settingsItems = [
@@ -43,6 +55,7 @@ const settingsItems = [
 export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { isAdmin } = useAdminCheck();
+  const { clients, activeClientId, setActiveClientId, activeClient } = useClient();
 
   return (
     <Sidebar className="border-r border-border">
@@ -54,6 +67,31 @@ export function AppSidebar() {
           <span className="font-semibold text-lg">Senddot</span>
         </div>
       </SidebarHeader>
+
+      {/* Client Selector */}
+      {clients.length > 0 && (
+        <div className="px-4 pt-4">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">
+            Active Client
+          </label>
+          <Select value={activeClientId || 'all'} onValueChange={(v) => setActiveClientId(v === 'all' ? null : v)}>
+            <SelectTrigger className="w-full h-9 text-sm">
+              <SelectValue placeholder="All Clients" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-3 w-3" />
+                    {c.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <SidebarContent className="px-4 py-4">
         <SidebarGroup>
@@ -120,6 +158,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4 border-t border-border">
         <div className="flex flex-col gap-3">
+          {activeClient && (
+            <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1.5 truncate">
+              <Building2 className="h-3 w-3 inline mr-1" />
+              {activeClient.name}
+            </div>
+          )}
           <div className="text-sm text-muted-foreground truncate">
             {user?.email}
           </div>
