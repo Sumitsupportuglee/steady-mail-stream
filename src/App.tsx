@@ -24,6 +24,7 @@ import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import Clients from "./pages/Clients";
 import ClientReport from "./pages/ClientReport";
+import CRM from "./pages/CRM";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
