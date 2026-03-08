@@ -25,7 +25,8 @@ import {
 interface DashboardStats {
   emailsSent: number;
   openRate: number;
-  clickRate: number;
+  replyRate: number;
+  conversionRate: number;
 }
 
 interface RecentCampaign {
