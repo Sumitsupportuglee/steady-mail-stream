@@ -50,6 +50,22 @@ export default function Dashboard() {
     if (user) fetchDashboardData();
   }, [user]);
 
+  // Realtime subscriptions for live stats
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('dashboard-stats')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_opens' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_clicks' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, () => fetchDashboardData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const fetchDashboardData = async () => {
     try {
       const thirtyDaysAgo = new Date();
