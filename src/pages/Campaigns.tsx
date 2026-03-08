@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Send, Loader2, Eye, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useClient } from '@/contexts/ClientContext';
 
 interface Campaign {
   id: string;
