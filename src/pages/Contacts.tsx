@@ -124,6 +124,7 @@ export default function Contacts() {
         email: newEmail,
         name: newName || null,
         status: 'active',
+        client_id: activeClientId,
       });
 
       if (error) throw error;
