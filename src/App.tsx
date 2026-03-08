@@ -24,6 +24,7 @@ import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import Clients from "./pages/Clients";
 import ClientReport from "./pages/ClientReport";
+import CRM from "./pages/CRM";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/campaigns/new" element={<ProtectedRoute><CampaignWizard /></ProtectedRoute>} />
               <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute><LeadFinder /></ProtectedRoute>} />
+              <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
               
