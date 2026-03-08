@@ -170,6 +170,69 @@ export type Database = {
           },
         ]
       }
+      crm_leads: {
+        Row: {
+          client_id: string | null
+          company: string | null
+          contact_id: string | null
+          created_at: string
+          deal_value: number | null
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          position: number
+          stage: Database["public"]["Enums"]["crm_stage_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          company?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_value?: number | null
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          position?: number
+          stage?: Database["public"]["Enums"]["crm_stage_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          company?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_value?: number | null
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          position?: number
+          stage?: Database["public"]["Enums"]["crm_stage_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_leads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_leads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_clicks: {
         Row: {
           campaign_id: string
@@ -585,6 +648,12 @@ export type Database = {
       app_role: "admin" | "user"
       campaign_status_type: "draft" | "queued" | "sending" | "completed"
       contact_status_type: "active" | "bounced" | "unsubscribed"
+      crm_stage_type:
+        | "new_lead"
+        | "contacted"
+        | "interested"
+        | "meeting_scheduled"
+        | "closed"
       domain_status_type: "unverified" | "verified"
       email_status_type: "pending" | "sent" | "failed"
       subscription_plan_type: "monthly" | "yearly"
@@ -720,6 +789,13 @@ export const Constants = {
       app_role: ["admin", "user"],
       campaign_status_type: ["draft", "queued", "sending", "completed"],
       contact_status_type: ["active", "bounced", "unsubscribed"],
+      crm_stage_type: [
+        "new_lead",
+        "contacted",
+        "interested",
+        "meeting_scheduled",
+        "closed",
+      ],
       domain_status_type: ["unverified", "verified"],
       email_status_type: ["pending", "sent", "failed"],
       subscription_plan_type: ["monthly", "yearly"],
