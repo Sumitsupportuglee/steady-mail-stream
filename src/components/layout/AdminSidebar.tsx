@@ -30,6 +30,7 @@ const adminNavItems = [
   { title: 'User Management', url: '/admin/users', icon: Users },
   { title: 'SES Identities', url: '/admin/ses-identities', icon: Mail },
   { title: 'Rate Limits', url: '/admin/rate-limits', icon: Settings },
+  { title: 'Master Directory', url: '/admin/directory', icon: Globe },
 ];
 
 export function AdminSidebar() {
