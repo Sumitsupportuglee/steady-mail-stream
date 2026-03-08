@@ -143,6 +143,7 @@ export default function CampaignWizard() {
           body_html: bodyHtml,
           status: 'queued',
           recipient_count: recipients.length,
+          client_id: activeClientId,
         })
         .select()
         .single();

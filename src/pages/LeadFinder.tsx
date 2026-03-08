@@ -155,6 +155,7 @@ export default function LeadFinder() {
           email,
           name: lead.name || null,
           status: 'active' as const,
+          client_id: activeClientId,
         }));
       });
 

@@ -101,6 +101,7 @@ export default function SenderIdentities() {
           from_email: fromEmail,
           dkim_record: dkimRecord,
           domain_status: 'unverified',
+          client_id: activeClientId,
         });
 
       if (error) throw error;
