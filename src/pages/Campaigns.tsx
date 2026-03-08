@@ -50,11 +50,12 @@ export default function Campaigns() {
 
   const fetchCampaigns = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('campaigns')
         .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user!.id);
+      if (activeClientId) query = query.eq('client_id', activeClientId);
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setCampaigns(data || []);

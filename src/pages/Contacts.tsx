@@ -236,6 +236,7 @@ export default function Contacts() {
         email: row[emailColumn].trim(),
         name: nameColumn ? row[nameColumn]?.trim() || null : null,
         status: 'active' as const,
+        client_id: activeClientId,
       }));
 
     const batchSize = 100;
