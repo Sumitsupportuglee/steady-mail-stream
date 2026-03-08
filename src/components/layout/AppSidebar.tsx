@@ -10,6 +10,7 @@ import {
   CreditCard,
   Building2,
   BarChart3,
+  Kanban,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Link } from 'react-router-dom';
