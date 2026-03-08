@@ -45,6 +45,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import Papa from 'papaparse';
+import { useClient } from '@/contexts/ClientContext';
 
 interface Contact {
   id: string;
