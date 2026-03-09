@@ -129,6 +129,23 @@ export default function Contacts() {
 
       if (error) throw error;
 
+      // Fire outbound webhook event (best-effort)
+      try {
+        const { error: webhookError } = await supabase.functions.invoke('trigger-webhook', {
+          body: {
+            event_type: 'contact_created',
+            data: {
+              email: newEmail,
+              name: newName || null,
+              client_id: activeClientId ?? null,
+            },
+          },
+        });
+        if (webhookError) console.warn('trigger-webhook failed:', webhookError);
+      } catch (e) {
+        console.warn('trigger-webhook failed:', e);
+      }
+
       toast({
         title: 'Contact added',
         description: 'Contact has been added successfully.',

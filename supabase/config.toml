@@ -17,3 +17,10 @@ verify_jwt = false
 
 [functions.generate-outreach]
 verify_jwt = false
+
+[functions.zapier-inbound]
+verify_jwt = false
+
+[functions.trigger-webhook]
+verify_jwt = false
+
