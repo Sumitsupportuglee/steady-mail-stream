@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
+import { UpdatesSection } from '@/components/landing/UpdatesSection';
 import { Button } from '@/components/ui/button';
 import {
   Mail,
