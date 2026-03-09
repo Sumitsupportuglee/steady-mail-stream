@@ -11,6 +11,7 @@ import {
   Building2,
   BarChart3,
   Kanban,
+  Plug,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Link } from 'react-router-dom';
