@@ -491,6 +491,53 @@ export type Database = {
           },
         ]
       }
+      integration_token_secrets: {
+        Row: {
+          token_hash: string
+          token_id: string
+        }
+        Insert: {
+          token_hash: string
+          token_id: string
+        }
+        Update: {
+          token_hash?: string
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_token_secrets_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: true
+            referencedRelation: "integration_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          last_used_at: string | null
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       integrations: {
         Row: {
           client_id: string | null
@@ -885,6 +932,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_integration_token: {
+        Args: { _name: string; _token_hash: string }
+        Returns: string
+      }
       get_master_directory_categories: {
         Args: never
         Returns: {
