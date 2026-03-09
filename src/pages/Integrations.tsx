@@ -111,10 +111,10 @@ export default function Integrations() {
         const { error } = await supabase
           .from('integrations')
           .update({
-            webhook_url: integration.webhook_url,
-            is_enabled: integration.is_enabled,
-            config: integration.config,
-          })
+          webhook_url: integration.webhook_url,
+          is_enabled: integration.is_enabled,
+          config: integration.config as any,
+        })
           .eq('id', integration.id);
         if (error) throw error;
       } else {
