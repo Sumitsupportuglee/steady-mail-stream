@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_updates: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          title: string
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          title: string
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          title?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       business_directory: {
         Row: {
           address: string | null
