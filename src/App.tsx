@@ -25,6 +25,7 @@ import NotFound from "./pages/NotFound";
 import Clients from "./pages/Clients";
 import ClientReport from "./pages/ClientReport";
 import CRM from "./pages/CRM";
+import Integrations from "./pages/Integrations";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/leads" element={<ProtectedRoute><LeadFinder /></ProtectedRoute>} />
               <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
               <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
               
               {/* Admin routes */}
