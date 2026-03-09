@@ -177,6 +177,27 @@ export default function CRM() {
           position: stageLeads.length,
         });
         if (error) throw error;
+
+        // Fire outbound webhook event (best-effort)
+        try {
+          const { error: webhookError } = await supabase.functions.invoke('trigger-webhook', {
+            body: {
+              event_type: 'lead_created',
+              data: {
+                name: leadData.name,
+                email: leadData.email,
+                company: leadData.company,
+                stage: leadData.stage,
+                deal_value: leadData.deal_value,
+                client_id: activeClientId ?? null,
+              },
+            },
+          });
+          if (webhookError) console.warn('trigger-webhook failed:', webhookError);
+        } catch (e) {
+          console.warn('trigger-webhook failed:', e);
+        }
+
         toast({ title: 'Lead added', description: 'New lead has been added.' });
       }
       setIsDialogOpen(false);
