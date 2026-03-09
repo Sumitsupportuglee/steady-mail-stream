@@ -180,6 +180,9 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* Email Account Warmup Status */}
+        <WarmupStatus />
+
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
