@@ -270,6 +270,9 @@ export default function Landing() {
       {/* Reviews */}
       <ReviewsSection />
 
+      {/* App Updates */}
+      <UpdatesSection />
+
       {/* Pricing */}
       <section id="pricing" className="py-24">
         <div className="mx-auto max-w-5xl px-6">
