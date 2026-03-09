@@ -67,6 +67,19 @@ const PROVIDERS = [
       'Create a Zap with a "Webhooks by Zapier" trigger (Catch Hook). Paste the webhook URL below.',
   },
   {
+    id: 'n8n',
+    name: 'n8n',
+    icon: Cloud,
+    color: 'text-red-500',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
+    description: 'Connect to n8n workflows for powerful, self-hosted automation with 400+ integrations.',
+    fields: ['webhook_url'],
+    setupUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/',
+    instructions:
+      'Create a workflow with a Webhook node in n8n. Set the HTTP method to POST, then copy the Production webhook URL and paste it below.',
+  },
+  {
     id: 'slack',
     name: 'Slack',
     icon: MessageSquare,
