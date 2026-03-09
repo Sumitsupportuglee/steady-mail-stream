@@ -51,6 +51,7 @@ const mainNavItems = [
 ];
 
 const settingsItems = [
+  { title: 'Integrations', url: '/integrations', icon: Plug },
   { title: 'Pricing', url: '/pricing', icon: CreditCard },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
