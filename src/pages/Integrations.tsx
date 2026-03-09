@@ -369,7 +369,9 @@ export default function Integrations() {
               <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <p>
                 POST JSON like{' '}
-                <code className="bg-muted px-1 rounded">{{"event_type":"create_contact","data":{{"email":"a@b.com"}}}}</code>{' '}
+                <code className="bg-muted px-1 rounded">
+                  {'{"event_type":"create_contact","data":{"email":"a@b.com"}}'}
+                </code>{' '}
                 to create contacts, or{' '}
                 <code className="bg-muted px-1 rounded">create_lead</code> to create CRM leads.
               </p>
