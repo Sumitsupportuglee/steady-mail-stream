@@ -120,14 +120,14 @@ export default function Integrations() {
       } else {
         const { error } = await supabase
           .from('integrations')
-          .insert({
+          .insert([{
             user_id: user!.id,
             client_id: activeClientId,
             provider: providerId,
             webhook_url: integration.webhook_url,
             is_enabled: integration.is_enabled,
-            config: integration.config || {},
-          });
+            config: (integration.config || {}) as any,
+          }]);
         if (error) throw error;
       }
 
