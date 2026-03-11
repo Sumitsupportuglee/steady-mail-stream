@@ -102,6 +102,8 @@ export default function SenderIdentities() {
     }
 
     setIsSubmitting(true);
+
+    try {
       const dkimRecord = generateDkimRecord(fromEmail);
 
       const { error } = await supabase
