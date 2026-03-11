@@ -14,6 +14,19 @@ interface Subscription {
 // Demo accounts that get free access to all features
 const DEMO_ACCOUNTS = ['admin@personacraft.in'];
 
+// Pilot accounts with restricted free access
+const PILOT_ACCOUNTS = ['info@budfi.in'];
+
+export interface PilotLimits {
+  maxSenderIdentities: number;
+  maxLeadsPerMonth: number;
+}
+
+export const PILOT_LIMITS: PilotLimits = {
+  maxSenderIdentities: 2,
+  maxLeadsPerMonth: 1000,
+};
+
 export function useSubscription() {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
