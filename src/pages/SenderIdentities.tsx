@@ -40,6 +40,7 @@ interface SenderIdentity {
 
 export default function SenderIdentities() {
   const { user } = useAuth();
+  const { isPilotAccount } = useSubscription();
   const { activeClientId } = useClient();
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
   const [loading, setLoading] = useState(true);
