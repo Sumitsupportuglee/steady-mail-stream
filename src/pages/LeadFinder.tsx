@@ -97,9 +97,43 @@ export default function LeadFinder() {
   const [editableSubject, setEditableSubject] = useState('');
   const [editableBody, setEditableBody] = useState('');
 
+  // Fetch pilot account lead count for this month
+  const fetchPilotLeadCount = async () => {
+    if (!isPilotAccount || !user) return;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const { count } = await supabase
+      .from('business_directory')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', thirtyDaysAgo.toISOString());
+    setLeadsExtractedThisMonth(count || 0);
+  };
+
+  useState(() => { fetchPilotLeadCount(); });
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
+
+    // Enforce pilot lead limit
+    if (isPilotAccount && pilotLimits) {
+      const remaining = pilotLimits.maxLeadsPerMonth - leadsExtractedThisMonth;
+      if (remaining <= 0) {
+        toast({
+          title: 'Pilot limit reached',
+          description: `You have extracted ${leadsExtractedThisMonth} leads this month. Upgrade to a paid plan for unlimited leads.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (leadLimit > remaining) {
+        toast({
+          title: 'Lead limit adjusted',
+          description: `You can only extract ${remaining} more leads this month on the pilot plan.`,
+        });
+      }
+    }
 
     setLoading(true);
     setLeads([]);
