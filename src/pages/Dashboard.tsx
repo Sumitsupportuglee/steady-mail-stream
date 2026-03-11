@@ -136,8 +136,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Pilot Account Banner */}
+        {isPilotAccount && isActive && (
+          <Card className="bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-amber-500/30">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <Crown className="h-5 w-5 text-amber-500" />
+                  <div>
+                    <p className="font-semibold text-amber-700 dark:text-amber-400">Pilot Account — Free Trial</p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {daysRemaining} days remaining
+                      {subscription?.expires_at && (
+                        <span> · Expires {new Date(subscription.expires_at).toLocaleDateString()}</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30">Pilot</Badge>
+              </div>
+              <Progress value={Math.max(0, (daysRemaining / 30) * 100)} className="h-2" />
+              <p className="text-xs text-muted-foreground mt-2">
+                Limits: 2 sender identities · 1,000 leads/month
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Subscription Status */}
-        {isActive ? (
+        {!isPilotAccount && isActive && (
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -161,7 +189,9 @@ export default function Dashboard() {
               <Progress value={progressPercent} className="h-2" />
             </CardContent>
           </Card>
-        ) : (
+        )}
+        
+        {!isActive && (
           <Card className="border-destructive/30 bg-destructive/5">
             <CardContent className="flex items-center justify-between p-5">
               <div className="flex items-center gap-3">

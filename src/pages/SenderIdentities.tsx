@@ -90,9 +90,18 @@ export default function SenderIdentities() {
 
   const handleAddIdentity = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
-    try {
+    // Enforce pilot account limit
+    if (isPilotAccount && identities.length >= PILOT_LIMITS.maxSenderIdentities) {
+      toast({
+        title: 'Pilot limit reached',
+        description: `Pilot accounts can add a maximum of ${PILOT_LIMITS.maxSenderIdentities} sender identities. Upgrade to a paid plan for unlimited identities.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
       const dkimRecord = generateDkimRecord(fromEmail);
 
       const { error } = await supabase
