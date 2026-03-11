@@ -14,6 +14,19 @@ interface Subscription {
 // Demo accounts that get free access to all features
 const DEMO_ACCOUNTS = ['admin@personacraft.in'];
 
+// Pilot accounts with restricted free access
+const PILOT_ACCOUNTS = ['info@budfi.in'];
+
+export interface PilotLimits {
+  maxSenderIdentities: number;
+  maxLeadsPerMonth: number;
+}
+
+export const PILOT_LIMITS: PilotLimits = {
+  maxSenderIdentities: 2,
+  maxLeadsPerMonth: 1000,
+};
+
 export function useSubscription() {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -67,11 +80,12 @@ export function useSubscription() {
     fetchSubscription();
   }, [user]);
 
+  const isPilotAccount = user?.email ? PILOT_ACCOUNTS.includes(user.email) : false;
   const isActive = !!subscription && subscription.status === 'active';
 
   const daysRemaining = subscription?.expires_at
     ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  return { subscription, loading, isActive, daysRemaining, refetch: fetchSubscription };
+  return { subscription, loading, isActive, daysRemaining, isPilotAccount, pilotLimits: isPilotAccount ? PILOT_LIMITS : null, refetch: fetchSubscription };
 }
