@@ -80,11 +80,12 @@ export function useSubscription() {
     fetchSubscription();
   }, [user]);
 
+  const isPilotAccount = user?.email ? PILOT_ACCOUNTS.includes(user.email) : false;
   const isActive = !!subscription && subscription.status === 'active';
 
   const daysRemaining = subscription?.expires_at
     ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  return { subscription, loading, isActive, daysRemaining, refetch: fetchSubscription };
+  return { subscription, loading, isActive, daysRemaining, isPilotAccount, pilotLimits: isPilotAccount ? PILOT_LIMITS : null, refetch: fetchSubscription };
 }
