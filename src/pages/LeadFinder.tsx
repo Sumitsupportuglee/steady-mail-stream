@@ -77,7 +77,8 @@ export default function LeadFinder() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { activeClientId } = useClient();
-  const { isActive, loading: subLoading } = useSubscription();
+  const { isActive, isPilotAccount, pilotLimits, loading: subLoading } = useSubscription();
+  const [leadsExtractedThisMonth, setLeadsExtractedThisMonth] = useState<number>(0);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
   const [leadLimit, setLeadLimit] = useState<number>(5);
