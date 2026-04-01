@@ -243,6 +243,33 @@ async function updateCampaignStatuses(
   }
 }
 
+// --- TRACKING INJECTION ---
+
+function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string): string {
+  let body = htmlBody
+
+  // Rewrite links for click tracking (skip mailto: and # links)
+  body = body.replace(
+    /href="(https?:\/\/[^"]+)"/gi,
+    (_match, url) => {
+      const trackUrl = `${supabaseUrl}/functions/v1/track-click?id=${encodeURIComponent(emailQueueId)}&url=${encodeURIComponent(url)}`
+      return `href="${trackUrl}"`
+    }
+  )
+
+  // Inject open tracking pixel before </body> or at end
+  const pixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${encodeURIComponent(emailQueueId)}`
+  const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
+
+  if (body.includes('</body>')) {
+    body = body.replace('</body>', `${pixel}</body>`)
+  } else {
+    body += pixel
+  }
+
+  return body
+}
+
 // --- MAIN EXECUTION ---
 
 Deno.serve(async (req) => {
@@ -350,11 +377,14 @@ Deno.serve(async (req) => {
           if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
           try {
+            // Inject tracking into email body
+            const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
+
             await client.sendEmail(
               email.from_email,
               email.to_email,
               email.subject,
-              email.body
+              trackedBody
             )
 
             await supabase
