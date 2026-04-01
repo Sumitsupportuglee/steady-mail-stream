@@ -350,11 +350,14 @@ Deno.serve(async (req) => {
           if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
           try {
+            // Inject tracking into email body
+            const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
+
             await client.sendEmail(
               email.from_email,
               email.to_email,
               email.subject,
-              email.body
+              trackedBody
             )
 
             await supabase
