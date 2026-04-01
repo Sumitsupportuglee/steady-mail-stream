@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { TipTapEditor } from '@/components/editor/TipTapEditor';
+import { AIEmailWriter } from '@/components/email/AIEmailWriter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -247,6 +248,16 @@ export default function CampaignWizard() {
               <CardDescription>
                 Write your subject line and email body. Use {"{{name}}"} and {"{{email}}"} for personalization.
               </CardDescription>
+              <div className="pt-2">
+                <AIEmailWriter
+                  existingSubject={subject}
+                  existingBody={bodyHtml}
+                  onApply={(s, b) => {
+                    setSubject(s);
+                    setBodyHtml(b);
+                  }}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
