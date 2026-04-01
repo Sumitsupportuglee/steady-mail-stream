@@ -248,6 +248,16 @@ export default function CampaignWizard() {
               <CardDescription>
                 Write your subject line and email body. Use {"{{name}}"} and {"{{email}}"} for personalization.
               </CardDescription>
+              <div className="pt-2">
+                <AIEmailWriter
+                  existingSubject={subject}
+                  existingBody={bodyHtml}
+                  onApply={(s, b) => {
+                    setSubject(s);
+                    setBodyHtml(b);
+                  }}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
