@@ -1,74 +1,50 @@
 
 
-# Plan: Fix Email Delivery - AWS SES Sandbox Mode Limitation
+## Plan: Email Provider Selection, SMTP Presets Expansion, and Setup Instructions
 
-## Problem Identified
+### Overview
+Three changes: (1) Add email provider dropdown to Sender Identities dialog that controls whether DNS verification is needed, (2) expand SMTP presets with more US providers, (3) add expandable instruction cards to both pages.
 
-After analyzing the edge function logs and database, I found the **root cause** of your email delivery failures:
+### 1. Sender Identities — Email Provider Dropdown (`src/pages/SenderIdentities.tsx`)
 
-**Error from AWS SES:**
-```
-Email address is not verified. The following identities failed the check in region AP-SOUTH-2: 
-sumit.bapu.356@gmail.com, support@personacraft.in
-```
+- Add a `Select` dropdown in the "Add Identity" dialog with options: **Gmail**, **Yahoo**, **Outlook**, **Other**
+- Store the selected provider in a new state variable `emailProvider`
+- Save the provider value to a new column `email_provider` on the `sender_identities` table (migration needed)
+- **Gmail/Yahoo/Outlook**: After adding, show a success message: "No DNS configuration is needed for this provider. Your identity is ready to use." Auto-set `domain_status` to `verified`.
+- **Other**: Show the existing DNS verification flow (CNAME record + verify button). Set `domain_status` to `unverified`.
+- In the DNS Configuration panel on the right, conditionally show: if provider is Gmail/Yahoo/Outlook, show "No DNS setup required" info card instead of DNS records.
 
-Your AWS SES account is in **Sandbox mode**. In Sandbox mode, AWS requires **both** the sender AND recipient email addresses to be verified before you can send any email. This is a restriction AWS applies to all new accounts to prevent spam.
+**Database migration**: Add `email_provider` text column (nullable, default null) to `sender_identities`.
 
-## Current State
+### 2. SMTP Presets Expansion (`src/pages/Settings.tsx`)
 
-| Component | Status |
-|-----------|--------|
-| Sender domain | `support@personacraft.in` - Marked "verified" in your app |
-| Recipient email | `sumit.bapu.356@gmail.com` - **NOT verified** in AWS SES |
-| AWS SES account | **Sandbox mode** |
-| Email queue | 4 emails in "failed" status |
+Add these providers to `SMTP_PRESETS`:
+- **IONOS** — `smtp.ionos.com`, SSL 465, TLS 587
+- **iCloud Mail** — `smtp.mail.me.com`, SSL 0, TLS 587
+- **AOL** — `smtp.aol.com`, SSL 465, TLS 587
+- **Fastmail** — `smtp.fastmail.com`, SSL 465, TLS 587
+- **ProtonMail Bridge** — `127.0.0.1`, SSL 0, TLS 1025
+- **Rackspace** — `secure.emailsrvr.com`, SSL 465, TLS 587
+- **Amazon SES** — `email-smtp.us-east-1.amazonaws.com`, SSL 465, TLS 587
 
-## Solution: Two-Step Fix
+Add corresponding `SelectItem` entries in the dropdown.
 
-### Step 1: Verify Your Recipient Email in AWS SES (Required for Sandbox)
+### 3. Expandable Instruction Cards (Both Pages)
 
-Since your account is in Sandbox mode, you must verify the recipient email address before you can send to it.
+Use the existing `Accordion` component from `src/components/ui/accordion.tsx`.
 
-**Manual steps you need to do in your AWS Console:**
-1. Go to AWS Console → SES → Configuration → Verified identities
-2. Click "Create identity" → Choose "Email address"
-3. Enter `sumit.bapu.356@gmail.com` (or whichever email you want to receive test emails)
-4. Click "Create identity"
-5. Check your Gmail inbox and click the verification link AWS sends
+**Settings page** — Add an accordion above the SMTP form with items:
+- "How to find your SMTP credentials" — step-by-step for Gmail (App Password), Outlook, Zoho, IONOS, etc.
+- "Which encryption should I use?" — TLS vs SSL explanation
+- "Troubleshooting connection issues" — common fixes
 
-### Step 2: Reset Failed Emails and Retry
+**Sender Identities page** — Add an accordion at the top:
+- "What is a Sender Identity?" — explains from-name/from-email concept
+- "Do I need DNS verification?" — explains Gmail/Yahoo/Outlook skip vs custom domains
+- "How to add DNS records" — step-by-step guide for popular registrars
 
-After you verify the recipient email in AWS, I will:
-
-1. **Reset the failed email queue entries** to `pending` status so the cron job will pick them up again
-2. The emails should then send successfully
-
-## What I Will Update in Code
-
-No code changes are needed. The edge function is working correctly. The issue is purely an AWS SES configuration limitation (Sandbox mode).
-
-I will run a database query to reset the failed emails to "pending" status so they can be retried once you complete the AWS verification step.
-
----
-
-## Long-Term Solution: Exit SES Sandbox
-
-To send emails to any recipient without pre-verification, you need to request "Production Access" from AWS:
-
-1. Go to AWS Console → SES → Account dashboard
-2. Look for "Request production access" button
-3. Fill out the form explaining your use case (cold email platform for marketing)
-4. AWS typically responds within 24-48 hours
-
-Once approved, you can send to any email address - only the sender domain needs to be verified.
-
----
-
-## Summary
-
-| Action | Who Does It | When |
-|--------|-------------|------|
-| Verify recipient email in AWS SES | You (manual AWS step) | Now |
-| Reset failed emails to retry | Me (database update) | After you approve this plan |
-| Request SES production access | You (optional but recommended) | When ready to scale |
+### Files Modified
+- `src/pages/SenderIdentities.tsx` — provider dropdown, conditional DNS flow, instruction accordion
+- `src/pages/Settings.tsx` — expanded presets, instruction accordion
+- Database migration — add `email_provider` column to `sender_identities`
 
