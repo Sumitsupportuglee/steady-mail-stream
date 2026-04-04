@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -25,10 +26,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle, Info, HelpCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useClient } from '@/contexts/ClientContext';
+
+const FREE_PROVIDERS = ['gmail', 'yahoo', 'outlook'];
 
 interface SenderIdentity {
   id: string;
@@ -36,6 +45,7 @@ interface SenderIdentity {
   from_email: string;
   domain_status: 'unverified' | 'verified';
   dkim_record: string | null;
+  email_provider: string | null;
   created_at: string;
 }
 
@@ -53,6 +63,7 @@ export default function SenderIdentities() {
   // Form state
   const [fromName, setFromName] = useState('');
   const [fromEmail, setFromEmail] = useState('');
+  const [emailProvider, setEmailProvider] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -70,7 +81,7 @@ export default function SenderIdentities() {
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
-      setIdentities(data || []);
+      setIdentities((data as any[]) || []);
     } catch (error) {
       console.error('Error fetching identities:', error);
       toast({
@@ -89,10 +100,16 @@ export default function SenderIdentities() {
     return `em${randomId}._domainkey.${domain}`;
   };
 
+  const isFreeProvider = (provider: string) => FREE_PROVIDERS.includes(provider);
+
   const handleAddIdentity = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Enforce pilot account limit
+    if (!emailProvider) {
+      toast({ title: 'Select provider', description: 'Please select your email provider.', variant: 'destructive' });
+      return;
+    }
+
     if (isPilotAccount && identities.length >= PILOT_LIMITS.maxSenderIdentities) {
       toast({
         title: 'Pilot limit reached',
@@ -105,7 +122,8 @@ export default function SenderIdentities() {
     setIsSubmitting(true);
 
     try {
-      const dkimRecord = generateDkimRecord(fromEmail);
+      const isFree = isFreeProvider(emailProvider);
+      const dkimRecord = isFree ? null : generateDkimRecord(fromEmail);
 
       const { error } = await supabase
         .from('sender_identities')
@@ -114,19 +132,23 @@ export default function SenderIdentities() {
           from_name: fromName,
           from_email: fromEmail,
           dkim_record: dkimRecord,
-          domain_status: 'unverified',
+          domain_status: isFree ? 'verified' : 'unverified',
+          email_provider: emailProvider,
           client_id: activeClientId,
-        });
+        } as any);
 
       if (error) throw error;
 
       toast({
-        title: 'Identity added',
-        description: 'Please configure your DNS records to verify the domain.',
+        title: isFree ? 'Identity added & verified!' : 'Identity added',
+        description: isFree
+          ? 'No DNS configuration is needed for this provider. Your identity is ready to use.'
+          : 'Please configure your DNS records to verify the domain.',
       });
 
       setFromName('');
       setFromEmail('');
+      setEmailProvider('');
       setIsAddDialogOpen(false);
       fetchIdentities();
     } catch (error: any) {
@@ -220,6 +242,10 @@ export default function SenderIdentities() {
     });
   };
 
+  const selectedIsFreeProvider = selectedIdentity?.email_provider
+    ? isFreeProvider(selectedIdentity.email_provider)
+    : false;
+
   if (loading) {
     return (
       <AppLayout>
@@ -256,6 +282,38 @@ export default function SenderIdentities() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  {/* Email Provider Selection */}
+                  <div className="space-y-2">
+                    <Label>Email Provider</Label>
+                    <Select value={emailProvider} onValueChange={setEmailProvider}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your email provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gmail">Gmail / Google Workspace</SelectItem>
+                        <SelectItem value="yahoo">Yahoo Mail</SelectItem>
+                        <SelectItem value="outlook">Outlook / Microsoft 365</SelectItem>
+                        <SelectItem value="other">Other (Custom Domain)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {emailProvider && isFreeProvider(emailProvider) && (
+                      <Alert className="border-primary/30 bg-primary/5">
+                        <Info className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          No DNS configuration required for {emailProvider === 'gmail' ? 'Gmail' : emailProvider === 'yahoo' ? 'Yahoo' : 'Outlook'}. Your identity will be auto-verified.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {emailProvider === 'other' && (
+                      <Alert className="border-amber-500/30 bg-amber-500/5">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-xs">
+                          Custom domains require DNS record verification (CNAME). You'll need access to your domain's DNS settings.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="from-name">From Name</Label>
                     <Input
@@ -271,7 +329,7 @@ export default function SenderIdentities() {
                     <Input
                       id="from-email"
                       type="email"
-                      placeholder="john@youragency.com"
+                      placeholder={emailProvider === 'gmail' ? 'you@gmail.com' : emailProvider === 'yahoo' ? 'you@yahoo.com' : emailProvider === 'outlook' ? 'you@outlook.com' : 'john@youragency.com'}
                       value={fromEmail}
                       onChange={(e) => setFromEmail(e.target.value)}
                       required
@@ -297,6 +355,47 @@ export default function SenderIdentities() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Help & Instructions Accordion */}
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="what-is">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> What is a Sender Identity?</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <p className="text-muted-foreground">A sender identity defines the "From" name and email address that recipients see when they receive your emails. For example, <strong>"John from Acme" &lt;john@acme.com&gt;</strong>. You need at least one verified sender identity before you can send campaigns.</p>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="dns-needed">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Do I need DNS verification?</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 text-muted-foreground">
+                <p><strong>Gmail, Yahoo, Outlook:</strong> No DNS setup needed. These providers are automatically verified when you add them. Just make sure your SMTP credentials are configured in Settings.</p>
+                <p><strong>Custom domains (e.g., you@yourcompany.com):</strong> DNS verification is required. You'll need to add a CNAME record to your domain's DNS settings to prove ownership. This helps improve email deliverability and prevents spoofing.</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="dns-howto">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> How to add DNS records</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 text-muted-foreground text-sm">
+                <p>After adding a custom domain identity, you'll see a CNAME record to add. Here's how for popular registrars:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>GoDaddy:</strong> DNS → Manage Zones → Add Record → CNAME → paste Host and Value</li>
+                  <li><strong>Namecheap:</strong> Domain List → Advanced DNS → Add New Record → CNAME</li>
+                  <li><strong>Cloudflare:</strong> DNS → Records → Add Record → CNAME (disable proxy/orange cloud)</li>
+                  <li><strong>Hostinger:</strong> hPanel → DNS Zone → Add CNAME record</li>
+                  <li><strong>IONOS:</strong> Domains & SSL → DNS → Add Record → CNAME</li>
+                </ul>
+                <p className="mt-2">After adding the record, wait 5–30 minutes (up to 48 hours in some cases), then click <strong>"Verify Domain"</strong>.</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Identities List */}
@@ -338,6 +437,11 @@ export default function SenderIdentities() {
                             <div className="text-sm text-muted-foreground">
                               {identity.from_email}
                             </div>
+                            {identity.email_provider && (
+                              <Badge variant="outline" className="mt-1 text-xs capitalize">
+                                {identity.email_provider === 'other' ? 'Custom Domain' : identity.email_provider}
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -386,95 +490,108 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
-                  {selectedIdentity.domain_status === 'unverified' && (
-                    <Alert className="border-destructive/50 bg-destructive/10">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Action Required</AlertTitle>
+                  {/* Free provider — no DNS needed */}
+                  {selectedIsFreeProvider ? (
+                    <Alert className="border-green-500/30 bg-green-500/5">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertTitle>No DNS Setup Required</AlertTitle>
                       <AlertDescription>
-                        After adding DNS records, you must click "Verify Domain" below to complete verification.
-                        The domain will not be verified automatically.
+                        <span className="capitalize">{selectedIdentity.email_provider}</span> identities don't require DNS verification. Your identity is verified and ready to use. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
                       </AlertDescription>
                     </Alert>
-                  )}
+                  ) : (
+                    <>
+                      {selectedIdentity.domain_status === 'unverified' && (
+                        <Alert className="border-destructive/50 bg-destructive/10">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Action Required</AlertTitle>
+                          <AlertDescription>
+                            After adding DNS records, you must click "Verify Domain" below to complete verification.
+                            The domain will not be verified automatically.
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-                  <div className="rounded-lg bg-muted p-4">
-                    <h4 className="font-medium mb-2">CNAME Record</h4>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Add this CNAME record to your DNS provider (GoDaddy, Namecheap, Cloudflare, etc.)
-                    </p>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-background rounded border">
-                        <div>
-                          <div className="text-xs text-muted-foreground">Host</div>
-                          <div className="font-mono text-sm">{selectedIdentity.dkim_record?.split('.')[0]}._domainkey</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}._domainkey`)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-background rounded border">
-                        <div>
-                          <div className="text-xs text-muted-foreground">Value</div>
-                          <div className="font-mono text-sm break-all">
-                            {selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com
+                      <div className="rounded-lg bg-muted p-4">
+                        <h4 className="font-medium mb-2">CNAME Record</h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Add this CNAME record to your DNS provider (GoDaddy, Namecheap, Cloudflare, etc.)
+                        </p>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 bg-background rounded border">
+                            <div>
+                              <div className="text-xs text-muted-foreground">Host</div>
+                              <div className="font-mono text-sm">{selectedIdentity.dkim_record?.split('.')[0]}._domainkey</div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}._domainkey`)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-background rounded border">
+                            <div>
+                              <div className="text-xs text-muted-foreground">Value</div>
+                              <div className="font-mono text-sm break-all">
+                                {selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com`)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
+                      </div>
+
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                        <h4 className="font-medium mb-2 flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4" />
+                          Verify Your Domain
+                        </h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          After adding the CNAME record to your DNS, click the button below to verify your domain.
+                          DNS propagation can take up to 48 hours.
+                        </p>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com`)}
+                          onClick={() => handleVerifyDomain(selectedIdentity)}
+                          disabled={isVerifying || selectedIdentity.domain_status === 'verified'}
+                          className="w-full"
                         >
-                          <Copy className="h-4 w-4" />
+                          {isVerifying ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : selectedIdentity.domain_status === 'verified' ? (
+                            <>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Domain Verified
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                              Verify Domain Now
+                            </>
+                          )}
                         </Button>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                    <h4 className="font-medium mb-2 flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4" />
-                      Verify Your Domain
-                    </h4>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      After adding the CNAME record to your DNS, click the button below to verify your domain.
-                      DNS propagation can take up to 48 hours.
-                    </p>
-                    <Button
-                      onClick={() => handleVerifyDomain(selectedIdentity)}
-                      disabled={isVerifying || selectedIdentity.domain_status === 'verified'}
-                      className="w-full"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Verifying...
-                        </>
-                      ) : selectedIdentity.domain_status === 'verified' ? (
-                        <>
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                          Domain Verified
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Verify Domain Now
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p><strong>Important:</strong></p>
-                    <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li>DNS changes can take up to 48 hours to propagate</li>
-                      <li>You must click "Verify Domain" after adding DNS records</li>
-                      <li>If verification fails, wait a few hours and try again</li>
-                    </ul>
-                  </div>
+                      <div className="text-sm text-muted-foreground space-y-2">
+                        <p><strong>Important:</strong></p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>DNS changes can take up to 48 hours to propagate</li>
+                          <li>You must click "Verify Domain" after adding DNS records</li>
+                          <li>If verification fails, wait a few hours and try again</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
