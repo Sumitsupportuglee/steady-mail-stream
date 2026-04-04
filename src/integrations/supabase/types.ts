@@ -760,6 +760,7 @@ export type Database = {
           domain_status:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
+          email_provider: string | null
           from_email: string
           from_name: string
           id: string
@@ -773,6 +774,7 @@ export type Database = {
           domain_status?:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
+          email_provider?: string | null
           from_email: string
           from_name: string
           id?: string
@@ -786,6 +788,7 @@ export type Database = {
           domain_status?:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
+          email_provider?: string | null
           from_email?: string
           from_name?: string
           id?: string

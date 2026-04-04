@@ -1,0 +1,1 @@
+ALTER TABLE public.sender_identities ADD COLUMN email_provider text DEFAULT null;
