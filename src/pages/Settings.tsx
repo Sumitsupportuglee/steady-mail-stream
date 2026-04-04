@@ -201,6 +201,63 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* SMTP Help & Instructions */}
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="find-smtp">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> How to find your SMTP credentials</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-3 text-muted-foreground text-sm">
+                <p><strong>Gmail / Google Workspace:</strong></p>
+                <ol className="list-decimal list-inside ml-2 space-y-1">
+                  <li>Go to <strong>myaccount.google.com → Security → 2-Step Verification</strong></li>
+                  <li>At the bottom, click <strong>"App passwords"</strong></li>
+                  <li>Generate a new app password for "Mail"</li>
+                  <li>Use your Gmail address as username and the generated 16-character password</li>
+                </ol>
+                <p><strong>Microsoft 365 / Outlook:</strong></p>
+                <ol className="list-decimal list-inside ml-2 space-y-1">
+                  <li>Enable SMTP AUTH in Microsoft 365 Admin Center</li>
+                  <li>Use your full email as username and account password</li>
+                  <li>Use TLS encryption on port 587</li>
+                </ol>
+                <p><strong>Zoho Mail:</strong> Use your full Zoho email and password. Enable "Less secure apps" if needed in Zoho settings.</p>
+                <p><strong>IONOS:</strong> Use your IONOS email address and the email password you set in IONOS control panel.</p>
+                <p><strong>Hostinger:</strong> Go to hPanel → Emails → Manage → use the email and password you created.</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="encryption">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Which encryption should I use?</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 text-muted-foreground text-sm">
+                <p><strong>TLS (STARTTLS) — Port 587</strong> (Recommended): Starts as plain text and upgrades to encrypted. Works with most providers and is the modern standard.</p>
+                <p><strong>SSL — Port 465:</strong> Encrypted from the start. Use this if your provider specifically requires it or if TLS doesn't work.</p>
+                <p><strong>Rule of thumb:</strong> Try TLS (587) first. If it doesn't connect, switch to SSL (465). Some providers like Microsoft 365 only support TLS.</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="troubleshoot">
+            <AccordionTrigger>
+              <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Troubleshooting connection issues</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 text-muted-foreground text-sm">
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Authentication failed:</strong> Double-check your username and password. For Gmail, you must use an App Password (not your regular password).</li>
+                  <li><strong>Connection timeout:</strong> Try switching between TLS (587) and SSL (465). Your firewall or ISP may block one port.</li>
+                  <li><strong>Emails not delivered:</strong> Check your sender identity is verified. Also check spam/junk folders on the recipient side.</li>
+                  <li><strong>"Less secure apps" error:</strong> Some providers require you to enable third-party app access in your account security settings.</li>
+                  <li><strong>ProtonMail:</strong> You must have ProtonMail Bridge running on your machine. It creates a local SMTP server at 127.0.0.1:1025.</li>
+                </ul>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         {/* SMTP Configuration Card */}
         <Card>
           <CardHeader>
