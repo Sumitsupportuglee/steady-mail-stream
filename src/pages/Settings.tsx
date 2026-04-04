@@ -8,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Save, Server, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Save, Server, Eye, EyeOff, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 const SMTP_PRESETS: Record<string, { host: string; ssl: number; tls: number; note: string }> = {
   hostinger: { host: 'smtp.hostinger.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
@@ -19,6 +25,13 @@ const SMTP_PRESETS: Record<string, { host: string; ssl: number; tls: number; not
   godaddy: { host: 'smtpout.secureserver.net', ssl: 465, tls: 587, note: 'Full Email + Password' },
   namecheap: { host: 'mail.privateemail.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
   dreamhost: { host: 'smtp.dreamhost.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
+  ionos: { host: 'smtp.ionos.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
+  icloud: { host: 'smtp.mail.me.com', ssl: 0, tls: 587, note: 'App-specific Password (TLS only)' },
+  aol: { host: 'smtp.aol.com', ssl: 465, tls: 587, note: 'App Password required' },
+  fastmail: { host: 'smtp.fastmail.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
+  protonmail: { host: '127.0.0.1', ssl: 0, tls: 1025, note: 'Requires ProtonMail Bridge running locally' },
+  rackspace: { host: 'secure.emailsrvr.com', ssl: 465, tls: 587, note: 'Full Email + Password' },
+  amazonses: { host: 'email-smtp.us-east-1.amazonaws.com', ssl: 465, tls: 587, note: 'SMTP credentials from AWS Console' },
   custom: { host: '', ssl: 465, tls: 587, note: 'Enter your SMTP details manually' },
 };
 
