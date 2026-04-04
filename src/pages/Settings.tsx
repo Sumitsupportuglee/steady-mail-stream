@@ -239,6 +239,13 @@ export default function Settings() {
                   <SelectItem value="godaddy">GoDaddy</SelectItem>
                   <SelectItem value="namecheap">Namecheap</SelectItem>
                   <SelectItem value="dreamhost">DreamHost</SelectItem>
+                  <SelectItem value="ionos">IONOS</SelectItem>
+                  <SelectItem value="icloud">iCloud Mail</SelectItem>
+                  <SelectItem value="aol">AOL</SelectItem>
+                  <SelectItem value="fastmail">Fastmail</SelectItem>
+                  <SelectItem value="protonmail">ProtonMail Bridge</SelectItem>
+                  <SelectItem value="rackspace">Rackspace</SelectItem>
+                  <SelectItem value="amazonses">Amazon SES</SelectItem>
                   <SelectItem value="custom">Custom / Other</SelectItem>
                 </SelectContent>
               </Select>
