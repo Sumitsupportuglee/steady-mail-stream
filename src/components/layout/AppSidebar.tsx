@@ -43,7 +43,6 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Clients', url: '/clients', icon: Building2 },
   { title: 'Lead Finder', url: '/leads', icon: SearchCheck },
-  { title: 'Sender Identities', url: '/identities', icon: Mail },
   { title: 'Contacts', url: '/contacts', icon: Users },
   { title: 'Campaigns', url: '/campaigns', icon: Send },
   { title: 'CRM', url: '/crm', icon: Kanban },

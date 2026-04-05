@@ -44,6 +44,14 @@ interface SenderIdentity {
   domain_status: 'unverified' | 'verified';
 }
 
+interface SmtpAccount {
+  id: string;
+  label: string;
+  smtp_username: string;
+  smtp_host: string;
+  is_default: boolean;
+}
+
 type WizardStep = 1 | 2 | 3;
 
 export default function CampaignWizard() {
@@ -61,7 +69,9 @@ export default function CampaignWizard() {
   // Step 2: Audience
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
+  const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
+  const [selectedSmtp, setSelectedSmtp] = useState('');
   const [audienceType, setAudienceType] = useState<'all' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
 
@@ -86,13 +96,24 @@ export default function CampaignWizard() {
         .eq('user_id', user!.id);
       if (activeClientId) identitiesQuery = identitiesQuery.eq('client_id', activeClientId);
 
-      const [contactsRes, identitiesRes] = await Promise.all([contactsQuery, identitiesQuery]);
+      const smtpQuery = supabase
+        .from('smtp_accounts' as any)
+        .select('id, label, smtp_username, smtp_host, is_default')
+        .eq('user_id', user!.id);
+
+      const [contactsRes, identitiesRes, smtpRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery]);
 
       if (contactsRes.error) throw contactsRes.error;
       if (identitiesRes.error) throw identitiesRes.error;
 
       setContacts(contactsRes.data || []);
       setIdentities(identitiesRes.data || []);
+      const smtpData = (smtpRes.data as any[]) || [];
+      setSmtpAccounts(smtpData);
+      // Auto-select default SMTP
+      const defaultSmtp = smtpData.find((s: any) => s.is_default);
+      if (defaultSmtp) setSelectedSmtp(defaultSmtp.id);
+      else if (smtpData.length > 0) setSelectedSmtp(smtpData[0].id);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -121,7 +142,7 @@ export default function CampaignWizard() {
   };
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const canProceedToStep3 = selectedIdentity !== '' && getRecipientCount() > 0;
+  const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
 
   const handleQueueCampaign = async () => {
     setIsSubmitting(true);
@@ -328,6 +349,28 @@ export default function CampaignWizard() {
                 )}
               </div>
 
+              <div className="space-y-2">
+                <Label>SMTP Account</Label>
+                <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select SMTP account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {smtpAccounts.map((acct) => (
+                      <SelectItem key={acct.id} value={acct.id}>
+                        {acct.label} ({acct.smtp_username})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {smtpAccounts.length === 0 && (
+                  <p className="text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Add an SMTP account in Settings first
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-4">
                 <Label>Recipients</Label>
                 <div className="flex gap-4">
@@ -409,6 +452,12 @@ export default function CampaignWizard() {
                       {' <'}
                       {identities.find(i => i.id === selectedIdentity)?.from_email}
                       {'>'}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted">
+                    <div className="text-sm text-muted-foreground">SMTP Account</div>
+                    <div className="font-medium mt-1">
+                      {smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected'}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">
