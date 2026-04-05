@@ -369,6 +369,7 @@ export default function CampaignWizard() {
                     Add an SMTP account in Settings first
                   </p>
                 )}
+              </div>
 
               <div className="space-y-4">
                 <Label>Recipients</Label>
