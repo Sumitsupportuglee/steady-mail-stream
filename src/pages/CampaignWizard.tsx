@@ -142,7 +142,7 @@ export default function CampaignWizard() {
   };
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const canProceedToStep3 = selectedIdentity !== '' && getRecipientCount() > 0;
+  const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
 
   const handleQueueCampaign = async () => {
     setIsSubmitting(true);
