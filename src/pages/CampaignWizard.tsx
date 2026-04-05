@@ -349,6 +349,27 @@ export default function CampaignWizard() {
                 )}
               </div>
 
+              <div className="space-y-2">
+                <Label>SMTP Account</Label>
+                <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select SMTP account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {smtpAccounts.map((acct) => (
+                      <SelectItem key={acct.id} value={acct.id}>
+                        {acct.label} ({acct.smtp_username})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {smtpAccounts.length === 0 && (
+                  <p className="text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Add an SMTP account in Settings first
+                  </p>
+                )}
+
               <div className="space-y-4">
                 <Label>Recipients</Label>
                 <div className="flex gap-4">
