@@ -812,6 +812,62 @@ export type Database = {
           },
         ]
       }
+      smtp_accounts: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          is_default: boolean
+          label: string
+          provider: string
+          smtp_encryption: string
+          smtp_host: string
+          smtp_password: string
+          smtp_port: number
+          smtp_username: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          provider?: string
+          smtp_encryption?: string
+          smtp_host: string
+          smtp_password: string
+          smtp_port?: number
+          smtp_username: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          provider?: string
+          smtp_encryption?: string
+          smtp_host?: string
+          smtp_password?: string
+          smtp_port?: number
+          smtp_username?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smtp_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           amount: number
