@@ -455,6 +455,12 @@ export default function CampaignWizard() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">
+                    <div className="text-sm text-muted-foreground">SMTP Account</div>
+                    <div className="font-medium mt-1">
+                      {smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected'}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-muted">
                     <div className="text-sm text-muted-foreground">Recipients</div>
                     <div className="font-medium mt-1 flex items-center gap-2">
                       <Users className="h-4 w-4" />
