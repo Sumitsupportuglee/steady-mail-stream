@@ -52,6 +52,8 @@ interface SmtpAccount {
   is_default: boolean;
 }
 
+type WizardStep = 1 | 2 | 3;
+
 export default function CampaignWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -67,7 +69,9 @@ export default function CampaignWizard() {
   // Step 2: Audience
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
+  const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
+  const [selectedSmtp, setSelectedSmtp] = useState('');
   const [audienceType, setAudienceType] = useState<'all' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
 
