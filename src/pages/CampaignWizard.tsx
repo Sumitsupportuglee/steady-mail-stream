@@ -44,7 +44,13 @@ interface SenderIdentity {
   domain_status: 'unverified' | 'verified';
 }
 
-type WizardStep = 1 | 2 | 3;
+interface SmtpAccount {
+  id: string;
+  label: string;
+  smtp_username: string;
+  smtp_host: string;
+  is_default: boolean;
+}
 
 export default function CampaignWizard() {
   const { user } = useAuth();
