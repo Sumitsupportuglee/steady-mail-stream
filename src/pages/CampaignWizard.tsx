@@ -96,13 +96,24 @@ export default function CampaignWizard() {
         .eq('user_id', user!.id);
       if (activeClientId) identitiesQuery = identitiesQuery.eq('client_id', activeClientId);
 
-      const [contactsRes, identitiesRes] = await Promise.all([contactsQuery, identitiesQuery]);
+      const smtpQuery = supabase
+        .from('smtp_accounts' as any)
+        .select('id, label, smtp_username, smtp_host, is_default')
+        .eq('user_id', user!.id);
+
+      const [contactsRes, identitiesRes, smtpRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery]);
 
       if (contactsRes.error) throw contactsRes.error;
       if (identitiesRes.error) throw identitiesRes.error;
 
       setContacts(contactsRes.data || []);
       setIdentities(identitiesRes.data || []);
+      const smtpData = (smtpRes.data as any[]) || [];
+      setSmtpAccounts(smtpData);
+      // Auto-select default SMTP
+      const defaultSmtp = smtpData.find((s: any) => s.is_default);
+      if (defaultSmtp) setSelectedSmtp(defaultSmtp.id);
+      else if (smtpData.length > 0) setSelectedSmtp(smtpData[0].id);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
