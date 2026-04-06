@@ -33,7 +33,29 @@ class SmtpClient {
   private encoder = new TextEncoder()
   private decoder = new TextDecoder()
 
-  async connect(config: SmtpConfig): Promise<void> {
+  async connect(config: SmtpConfig, maxRetries = 3): Promise<void> {
+    let lastError: Error | null = null
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this._tryConnect(config)
+        return
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        const isTransient = lastError.message.includes('4.3.0') || lastError.message.includes('454') || lastError.message.includes('Try again later')
+        if (isTransient && attempt < maxRetries) {
+          console.warn(`SMTP transient error (attempt ${attempt}/${maxRetries}): ${lastError.message}, retrying in ${attempt * 2}s...`)
+          await new Promise(r => setTimeout(r, attempt * 2000))
+          try { this.conn?.close() } catch { /* ignore */ }
+          this.conn = null
+          continue
+        }
+        throw lastError
+      }
+    }
+    throw lastError!
+  }
+
+  private async _tryConnect(config: SmtpConfig): Promise<void> {
     if (config.smtp_encryption === 'ssl') {
       this.conn = await Deno.connectTls({
         hostname: config.smtp_host,
