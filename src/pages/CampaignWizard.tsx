@@ -188,6 +188,7 @@ export default function CampaignWizard() {
           subject,
           body: personalizedBody,
           status: 'pending' as const,
+          smtp_account_id: selectedSmtp || null,
         };
       });
 

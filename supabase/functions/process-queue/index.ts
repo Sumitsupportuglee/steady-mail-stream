@@ -15,6 +15,7 @@ interface QueueItem {
   body: string
   status: string
   attempt_count: number
+  smtp_account_id: string | null
 }
 
 interface SmtpConfig {
@@ -34,20 +35,18 @@ class SmtpClient {
 
   async connect(config: SmtpConfig): Promise<void> {
     if (config.smtp_encryption === 'ssl') {
-      // Direct TLS connection (port 465)
       this.conn = await Deno.connectTls({
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
-      await this.readResponse() // Read greeting
+      await this.readResponse()
     } else {
-      // STARTTLS (port 587) - connect plain first, then upgrade
       const tcpConn = await Deno.connect({
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
       this.conn = tcpConn
-      await this.readResponse() // Read greeting
+      await this.readResponse()
 
       await this.sendCommand(`EHLO localhost`)
       await this.readMultilineResponse()
@@ -58,25 +57,20 @@ class SmtpClient {
         throw new Error(`STARTTLS failed: ${tlsResp}`)
       }
 
-      // Upgrade to TLS
       this.conn = await Deno.startTls(tcpConn, {
         hostname: config.smtp_host,
       })
     }
 
-    // EHLO after TLS - capture response to check supported auth methods
     await this.sendCommand(`EHLO localhost`)
     const ehloResp = await this.readMultilineResponse()
-    
-    // Detect supported AUTH methods from EHLO response
+
     const authLine = ehloResp.split('\n').find(l => l.toUpperCase().includes('AUTH'))
     const supportsPlain = authLine?.toUpperCase().includes('PLAIN') ?? false
-    const supportsLogin = authLine?.toUpperCase().includes('LOGIN') ?? false
-    
-    console.log(`SMTP AUTH methods available: ${authLine || 'none detected'}, using: ${supportsPlain ? 'PLAIN' : supportsLogin ? 'LOGIN' : 'LOGIN (default)'}`)
+
+    console.log(`SMTP AUTH methods available: ${authLine || 'none detected'}, using: ${supportsPlain ? 'PLAIN' : 'LOGIN'}`)
 
     if (supportsPlain) {
-      // AUTH PLAIN
       const authPlainStr = `\0${config.smtp_username}\0${config.smtp_password}`
       const authPlainB64 = btoa(authPlainStr)
       await this.sendCommand(`AUTH PLAIN ${authPlainB64}`)
@@ -85,7 +79,6 @@ class SmtpClient {
         throw new Error(`AUTH PLAIN failed: ${authResp}`)
       }
     } else {
-      // AUTH LOGIN (default fallback)
       await this.sendCommand(`AUTH LOGIN`)
       const authResp = await this.readResponse()
       if (!authResp.startsWith('334')) {
@@ -113,29 +106,23 @@ class SmtpClient {
     htmlBody: string,
     fromName?: string
   ): Promise<string> {
-    // Extract clean email from "Name <email>" format
     const cleanFrom = from.match(/<(.+)>/)?.[1] || from
     const domain = cleanFrom.split('@')[1]
 
-    // MAIL FROM
     await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
     const mailResp = await this.readResponse()
     if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
 
-    // RCPT TO
     await this.sendCommand(`RCPT TO:<${to}>`)
     const rcptResp = await this.readResponse()
     if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
 
-    // DATA
     await this.sendCommand(`DATA`)
     const dataResp = await this.readResponse()
     if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
 
-    // Build email with proper headers for safe delivery
     const messageId = `<${crypto.randomUUID()}@${domain}>`
     const date = new Date().toUTCString()
-
     const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
 
     const headers = [
@@ -147,12 +134,10 @@ class SmtpClient {
       `MIME-Version: 1.0`,
       `Content-Type: text/html; charset=UTF-8`,
       `Content-Transfer-Encoding: quoted-printable`,
-      // Safe delivery headers
       `List-Unsubscribe: <mailto:unsubscribe@${domain}>`,
       `X-Mailer: SteadyMail/1.0`,
     ]
 
-    // Encode body as quoted-printable (handle dots at line start)
     const qpBody = htmlBody
       .replace(/\r\n/g, '\n')
       .replace(/\n/g, '\r\n')
@@ -194,13 +179,95 @@ class SmtpClient {
     while (true) {
       const line = await this.readResponse()
       full += line + '\n'
-      // Multi-line responses have '-' after code, last line has ' '
       const lines = line.split('\n')
       const lastLine = lines[lines.length - 1]
       if (lastLine.length >= 4 && lastLine[3] === ' ') break
     }
     return full.trim()
   }
+}
+
+// --- SMTP CONFIG RESOLVER ---
+
+async function getSmtpConfig(
+  supabase: any,
+  smtpAccountId: string | null,
+  userId: string
+): Promise<SmtpConfig | null> {
+  // Strategy: use explicit smtp_account_id if provided, else find default for user, else fallback to profiles
+  if (smtpAccountId) {
+    const { data, error } = await supabase
+      .from('smtp_accounts')
+      .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
+      .eq('id', smtpAccountId)
+      .single()
+
+    if (!error && data?.smtp_host && data?.smtp_username && data?.smtp_password) {
+      return {
+        smtp_host: data.smtp_host,
+        smtp_port: data.smtp_port || 587,
+        smtp_username: data.smtp_username,
+        smtp_password: data.smtp_password,
+        smtp_encryption: data.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
+      }
+    }
+    console.warn(`SMTP account ${smtpAccountId} not found or incomplete, falling back`)
+  }
+
+  // Fallback: default SMTP account for this user
+  const { data: defaultAcct } = await supabase
+    .from('smtp_accounts')
+    .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
+    .eq('user_id', userId)
+    .eq('is_default', true)
+    .single()
+
+  if (defaultAcct?.smtp_host && defaultAcct?.smtp_username && defaultAcct?.smtp_password) {
+    return {
+      smtp_host: defaultAcct.smtp_host,
+      smtp_port: defaultAcct.smtp_port || 587,
+      smtp_username: defaultAcct.smtp_username,
+      smtp_password: defaultAcct.smtp_password,
+      smtp_encryption: defaultAcct.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
+    }
+  }
+
+  // Last fallback: any SMTP account for the user
+  const { data: anyAcct } = await supabase
+    .from('smtp_accounts')
+    .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
+    .eq('user_id', userId)
+    .limit(1)
+    .single()
+
+  if (anyAcct?.smtp_host && anyAcct?.smtp_username && anyAcct?.smtp_password) {
+    return {
+      smtp_host: anyAcct.smtp_host,
+      smtp_port: anyAcct.smtp_port || 587,
+      smtp_username: anyAcct.smtp_username,
+      smtp_password: anyAcct.smtp_password,
+      smtp_encryption: anyAcct.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
+    }
+  }
+
+  // Legacy fallback: profiles table
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
+    .eq('id', userId)
+    .single()
+
+  if (profile?.smtp_host && profile?.smtp_username && profile?.smtp_password) {
+    return {
+      smtp_host: profile.smtp_host,
+      smtp_port: profile.smtp_port || 587,
+      smtp_username: profile.smtp_username,
+      smtp_password: profile.smtp_password,
+      smtp_encryption: profile.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
+    }
+  }
+
+  return null
 }
 
 // --- CAMPAIGN STATUS UPDATE ---
@@ -225,14 +292,12 @@ async function updateCampaignStatuses(
     const pending = pendingCount ?? 0
     const sent = sentCount ?? 0
 
-    // Only mark completed if no pending AND at least one was sent
     let newStatus: string
     if (pending > 0) {
       newStatus = 'sending'
     } else if (sent > 0) {
       newStatus = 'completed'
     } else {
-      // All failed, no sent, no pending
       newStatus = 'completed'
     }
 
@@ -248,7 +313,6 @@ async function updateCampaignStatuses(
 function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string): string {
   let body = htmlBody
 
-  // Rewrite links for click tracking (skip mailto: and # links)
   body = body.replace(
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url) => {
@@ -257,7 +321,6 @@ function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: str
     }
   )
 
-  // Inject open tracking pixel before </body> or at end
   const pixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${encodeURIComponent(emailQueueId)}`
   const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
 
@@ -282,7 +345,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Fetch batch of pending emails
     const { data: pendingEmails, error: fetchError } = await supabase
       .from('email_queue')
       .select('*')
@@ -301,29 +363,27 @@ Deno.serve(async (req) => {
 
     console.log(`Processing ${pendingEmails.length} emails...`)
 
-    // Group emails by user_id so we can batch SMTP connections
-    const emailsByUser = new Map<string, QueueItem[]>()
+    // Group emails by SMTP config key (smtp_account_id or user_id)
+    const emailsBySmtp = new Map<string, QueueItem[]>()
     for (const email of pendingEmails as QueueItem[]) {
-      const group = emailsByUser.get(email.user_id) || []
+      const key = email.smtp_account_id || `user:${email.user_id}`
+      const group = emailsBySmtp.get(key) || []
       group.push(email)
-      emailsByUser.set(email.user_id, group)
+      emailsBySmtp.set(key, group)
     }
 
     let successCount = 0
     let errorCount = 0
     const affectedCampaignIds = new Set<string>()
 
-    // Process each user's emails with their own SMTP config
-    for (const [userId, emails] of emailsByUser) {
-      // Fetch user's SMTP config
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption')
-        .eq('id', userId)
-        .single()
+    for (const [_smtpKey, emails] of emailsBySmtp) {
+      const firstEmail = emails[0]
 
-      if (profileError || !profile?.smtp_host || !profile?.smtp_username || !profile?.smtp_password) {
-        console.error(`User ${userId} has no SMTP config, marking emails as failed`)
+      // Resolve SMTP config
+      const smtpConfig = await getSmtpConfig(supabase, firstEmail.smtp_account_id, firstEmail.user_id)
+
+      if (!smtpConfig) {
+        console.error(`No SMTP config for user ${firstEmail.user_id}, marking emails as failed`)
         for (const email of emails) {
           if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
           await supabase
@@ -339,15 +399,6 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const smtpConfig: SmtpConfig = {
-        smtp_host: profile.smtp_host,
-        smtp_port: profile.smtp_port || 587,
-        smtp_username: profile.smtp_username,
-        smtp_password: profile.smtp_password,
-        smtp_encryption: profile.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
-      }
-
-      // Open one SMTP connection per user, send all their emails
       const client = new SmtpClient()
       let connected = false
 
@@ -356,7 +407,7 @@ Deno.serve(async (req) => {
         connected = true
       } catch (connErr: unknown) {
         const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
-        console.error(`SMTP connect failed for user ${userId}: ${errMsg}`)
+        console.error(`SMTP connect failed: ${errMsg}`)
         for (const email of emails) {
           if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
           await supabase
@@ -377,7 +428,6 @@ Deno.serve(async (req) => {
           if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
           try {
-            // Inject tracking into email body
             const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
 
             await client.sendEmail(
@@ -418,7 +468,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update campaign statuses
     if (affectedCampaignIds.size > 0) {
       await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
     }
