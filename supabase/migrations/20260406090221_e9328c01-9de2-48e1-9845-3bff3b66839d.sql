@@ -1,0 +1,1 @@
+ALTER TABLE public.email_queue ADD COLUMN smtp_account_id UUID REFERENCES public.smtp_accounts(id) ON DELETE SET NULL;
