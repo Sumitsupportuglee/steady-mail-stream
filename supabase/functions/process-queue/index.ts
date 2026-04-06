@@ -452,11 +452,30 @@ Deno.serve(async (req) => {
           try {
             const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
 
+            // Fetch sender identity from_name via campaign
+            let fromName: string | undefined
+            if (email.campaign_id) {
+              const { data: camp } = await supabase
+                .from('campaigns')
+                .select('sender_identity_id')
+                .eq('id', email.campaign_id)
+                .single()
+              if (camp?.sender_identity_id) {
+                const { data: identity } = await supabase
+                  .from('sender_identities')
+                  .select('from_name')
+                  .eq('id', camp.sender_identity_id)
+                  .single()
+                if (identity?.from_name) fromName = identity.from_name
+              }
+            }
+
             await client.sendEmail(
               email.from_email,
               email.to_email,
               email.subject,
-              trackedBody
+              trackedBody,
+              fromName
             )
 
             await supabase
