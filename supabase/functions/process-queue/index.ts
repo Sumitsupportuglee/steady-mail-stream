@@ -209,6 +209,31 @@ class SmtpClient {
   }
 }
 
+// --- DECRYPTION HELPER ---
+
+async function getDecryptionKey(): Promise<CryptoKey> {
+  const keyHex = Deno.env.get('SMTP_ENCRYPTION_KEY')
+  if (!keyHex || keyHex.length < 32) {
+    throw new Error('SMTP_ENCRYPTION_KEY not configured')
+  }
+  const keyBytes = new TextEncoder().encode(keyHex.slice(0, 32))
+  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt'])
+}
+
+async function decryptPassword(encrypted: string): Promise<string> {
+  try {
+    const key = await getDecryptionKey()
+    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
+    const iv = combined.slice(0, 12)
+    const ciphertext = combined.slice(12)
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
+    return new TextDecoder().decode(decrypted)
+  } catch {
+    // If decryption fails, assume legacy plain-text password
+    return encrypted
+  }
+}
+
 // --- SMTP CONFIG RESOLVER ---
 
 async function getSmtpConfig(
@@ -216,7 +241,6 @@ async function getSmtpConfig(
   smtpAccountId: string | null,
   userId: string
 ): Promise<SmtpConfig | null> {
-  // Strategy: use explicit smtp_account_id if provided, else find default for user, else fallback to profiles
   if (smtpAccountId) {
     const { data, error } = await supabase
       .from('smtp_accounts')
@@ -229,7 +253,7 @@ async function getSmtpConfig(
         smtp_host: data.smtp_host,
         smtp_port: data.smtp_port || 587,
         smtp_username: data.smtp_username,
-        smtp_password: data.smtp_password,
+        smtp_password: await decryptPassword(data.smtp_password),
         smtp_encryption: data.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
       }
     }
@@ -249,7 +273,7 @@ async function getSmtpConfig(
       smtp_host: defaultAcct.smtp_host,
       smtp_port: defaultAcct.smtp_port || 587,
       smtp_username: defaultAcct.smtp_username,
-      smtp_password: defaultAcct.smtp_password,
+      smtp_password: await decryptPassword(defaultAcct.smtp_password),
       smtp_encryption: defaultAcct.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
     }
   }
@@ -267,7 +291,7 @@ async function getSmtpConfig(
       smtp_host: anyAcct.smtp_host,
       smtp_port: anyAcct.smtp_port || 587,
       smtp_username: anyAcct.smtp_username,
-      smtp_password: anyAcct.smtp_password,
+      smtp_password: await decryptPassword(anyAcct.smtp_password),
       smtp_encryption: anyAcct.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
     }
   }
@@ -284,7 +308,7 @@ async function getSmtpConfig(
       smtp_host: profile.smtp_host,
       smtp_port: profile.smtp_port || 587,
       smtp_username: profile.smtp_username,
-      smtp_password: profile.smtp_password,
+      smtp_password: await decryptPassword(profile.smtp_password),
       smtp_encryption: profile.smtp_encryption === 'ssl' ? 'ssl' : 'tls',
     }
   }
