@@ -42,6 +42,15 @@ export async function decrypt(encrypted: string): Promise<string> {
   return new TextDecoder().decode(decrypted)
 }
 
+async function encryptIfNeeded(value: string): Promise<{ value: string; migrated: boolean }> {
+  try {
+    await decrypt(value)
+    return { value, migrated: false }
+  } catch {
+    return { value: await encrypt(value), migrated: true }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -71,6 +80,104 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const { action } = body
+
+    if (action === 'migrate-legacy') {
+      let smtpAccountsMigrated = 0
+      let profilesMigrated = 0
+      let clientsMigrated = 0
+
+      const { data: smtpAccounts, error: smtpAccountsError } = await supabase
+        .from('smtp_accounts')
+        .select('id, smtp_password')
+        .eq('user_id', user.id)
+        .not('smtp_password', 'is', null)
+
+      if (smtpAccountsError) throw smtpAccountsError
+
+      for (const account of smtpAccounts || []) {
+        const { value, migrated } = await encryptIfNeeded(account.smtp_password)
+        if (!migrated) continue
+
+        const { error } = await supabase
+          .from('smtp_accounts')
+          .update({ smtp_password: value })
+          .eq('id', account.id)
+          .eq('user_id', user.id)
+
+        if (error) throw error
+        smtpAccountsMigrated += 1
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('smtp_password')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (profileError) throw profileError
+
+      if (profile?.smtp_password) {
+        const { value, migrated } = await encryptIfNeeded(profile.smtp_password)
+        if (migrated) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ smtp_password: value })
+            .eq('id', user.id)
+
+          if (error) throw error
+          profilesMigrated = 1
+        }
+      }
+
+      const { data: clients, error: clientsError } = await supabase
+        .from('clients')
+        .select('id, smtp_password')
+        .eq('user_id', user.id)
+        .not('smtp_password', 'is', null)
+
+      if (clientsError) throw clientsError
+
+      for (const client of clients || []) {
+        const { value, migrated } = await encryptIfNeeded(client.smtp_password)
+        if (!migrated) continue
+
+        const { error } = await supabase
+          .from('clients')
+          .update({ smtp_password: value })
+          .eq('id', client.id)
+          .eq('user_id', user.id)
+
+        if (error) throw error
+        clientsMigrated += 1
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        migrated: {
+          smtp_accounts: smtpAccountsMigrated,
+          profiles: profilesMigrated,
+          clients: clientsMigrated,
+        },
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (action === 'encrypt') {
+      const { smtp_password } = body
+
+      if (!smtp_password) {
+        return new Response(JSON.stringify({ error: 'Missing SMTP password' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const encryptedPassword = await encrypt(smtp_password)
+
+      return new Response(JSON.stringify({ success: true, encrypted_password: encryptedPassword }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     if (action === 'create') {
       const { label, provider, smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption, is_default, client_id } = body

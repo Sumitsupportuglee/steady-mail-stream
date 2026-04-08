@@ -8,7 +8,6 @@ export interface Client {
   smtp_host: string | null;
   smtp_port: number | null;
   smtp_username: string | null;
-  smtp_password: string | null;
   smtp_encryption: string | null;
   created_at: string;
 }
@@ -49,7 +48,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('id, name, smtp_host, smtp_port, smtp_username, smtp_encryption, created_at')
         .eq('user_id', user.id)
         .order('name');
 
