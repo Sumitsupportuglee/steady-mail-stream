@@ -151,20 +151,21 @@ export default function Clients() {
     }
     setSavingSmtp(true);
     try {
-      const { error } = await supabase.functions.invoke('manage-smtp', {
-        body: {
-          action: 'create',
-          label: 'Client SMTP',
-          provider: selectedProvider,
+      const encryptionRes = await supabase.functions.invoke('manage-smtp', {
+        body: { action: 'encrypt', smtp_password: smtpPassword },
+      });
+      if (encryptionRes.error) throw encryptionRes.error;
+
+      const { error } = await supabase
+        .from('clients')
+        .update({
           smtp_host: smtpHost.trim(),
           smtp_port: parseInt(smtpPort, 10),
           smtp_username: smtpUsername.trim(),
-          smtp_password: smtpPassword,
+          smtp_password: encryptionRes.data.encrypted_password,
           smtp_encryption: smtpEncryption,
-          is_default: false,
-          client_id: smtpClientId,
-        },
-      });
+        })
+        .eq('id', smtpClientId);
       if (error) throw error;
       toast({ title: 'SMTP saved', description: 'Client email credentials updated.' });
       setIsSmtpOpen(false);

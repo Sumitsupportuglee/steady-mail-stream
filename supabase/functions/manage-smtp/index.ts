@@ -163,6 +163,22 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'encrypt') {
+      const { smtp_password } = body
+
+      if (!smtp_password) {
+        return new Response(JSON.stringify({ error: 'Missing SMTP password' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const encryptedPassword = await encrypt(smtp_password)
+
+      return new Response(JSON.stringify({ success: true, encrypted_password: encryptedPassword }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (action === 'create') {
       const { label, provider, smtp_host, smtp_port, smtp_username, smtp_password, smtp_encryption, is_default, client_id } = body
 
