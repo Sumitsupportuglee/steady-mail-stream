@@ -115,7 +115,7 @@ export default function Clients() {
     setSmtpHost(client.smtp_host || '');
     setSmtpPort(String(client.smtp_port || 587));
     setSmtpUsername(client.smtp_username || '');
-    setSmtpPassword(client.smtp_password || '');
+    setSmtpPassword('');
     setSmtpEncryption(client.smtp_encryption || 'tls');
 
     const preset = Object.entries(SMTP_PRESETS).find(
@@ -151,16 +151,20 @@ export default function Clients() {
     }
     setSavingSmtp(true);
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({
+      const { error } = await supabase.functions.invoke('manage-smtp', {
+        body: {
+          action: 'create',
+          label: 'Client SMTP',
+          provider: selectedProvider,
           smtp_host: smtpHost.trim(),
           smtp_port: parseInt(smtpPort, 10),
           smtp_username: smtpUsername.trim(),
           smtp_password: smtpPassword,
           smtp_encryption: smtpEncryption,
-        })
-        .eq('id', smtpClientId);
+          is_default: false,
+          client_id: smtpClientId,
+        },
+      });
       if (error) throw error;
       toast({ title: 'SMTP saved', description: 'Client email credentials updated.' });
       setIsSmtpOpen(false);
@@ -337,6 +341,7 @@ export default function Clients() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">For security, saved passwords are never shown again. Enter a new password only when changing it.</p>
             </div>
           </div>
           <DialogFooter>

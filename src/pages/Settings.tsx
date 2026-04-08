@@ -49,7 +49,6 @@ interface SmtpAccount {
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
-  smtp_password: string;
   smtp_encryption: string;
   is_default: boolean;
   created_at: string;
@@ -120,7 +119,7 @@ export default function Settings() {
         setProfile(profileRes.data as any);
         setOrganizationName((profileRes.data as any).organization_name || '');
       }
-      setSmtpAccounts((smtpRes.data as any[]) || []);
+      setSmtpAccounts(((smtpRes.data as any[]) || []).map(({ smtp_password, ...account }) => account));
       setIdentities((identitiesRes.data as any[]) || []);
     } catch (e) {
       console.error(e);
@@ -204,6 +203,16 @@ export default function Settings() {
       setSmtpSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+
+    supabase.functions.invoke('manage-smtp', {
+      body: { action: 'migrate-legacy' },
+    }).catch((error) => {
+      console.error('Failed to migrate legacy SMTP passwords', error);
+    });
+  }, [user]);
 
   const handleDeleteSmtp = async (id: string) => {
     try {
