@@ -175,20 +175,26 @@ export default function Settings() {
     setSmtpSaving(true);
     try {
       const isFirst = smtpAccounts.length === 0;
-      const { error } = await supabase.from('smtp_accounts' as any).insert({
-        user_id: user!.id,
-        label: label || `${provider !== 'custom' ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Custom'} SMTP`,
-        provider,
-        smtp_host: host.trim(),
-        smtp_port: parseInt(port, 10),
-        smtp_username: username.trim(),
-        smtp_password: password,
-        smtp_encryption: encryption,
-        is_default: isFirst,
-        client_id: activeClientId,
-      } as any);
-      if (error) throw error;
-      toast({ title: 'SMTP account added' });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await supabase.functions.invoke('manage-smtp', {
+        body: {
+          action: 'create',
+          label: label || `${provider !== 'custom' ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Custom'} SMTP`,
+          provider,
+          smtp_host: host.trim(),
+          smtp_port: parseInt(port, 10),
+          smtp_username: username.trim(),
+          smtp_password: password,
+          smtp_encryption: encryption,
+          is_default: isFirst,
+          client_id: activeClientId,
+        },
+      });
+      if (res.error) throw new Error(res.error.message);
+      toast({ title: 'SMTP account added securely' });
       setSmtpForm({ label: '', provider: 'custom', host: '', port: '587', username: '', password: '', encryption: 'tls' });
       setIsSmtpDialogOpen(false);
       fetchAll();
