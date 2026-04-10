@@ -347,5 +347,9 @@ export default function Landing() {
         </div>
       </footer>
     </div>
+
+      {/* ElevenLabs AI Chat Agent */}
+      <ElevenLabsWidget />
+    </div>
   );
 }
