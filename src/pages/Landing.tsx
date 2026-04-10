@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { UpdatesSection } from '@/components/landing/UpdatesSection';
+import { ElevenLabsWidget } from '@/components/ElevenLabsWidget';
 import { Button } from '@/components/ui/button';
 import {
   Mail,
