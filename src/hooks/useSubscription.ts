@@ -14,17 +14,21 @@ interface Subscription {
 // Demo accounts that get free access to all features
 const DEMO_ACCOUNTS = ['admin@personacraft.in'];
 
-// Pilot accounts with restricted free access
+// Pilot accounts with premium access
 const PILOT_ACCOUNTS = ['info@budfi.in'];
+
+// Pilot account start date (renewed on 2026-04-10)
+const PILOT_START_DATE = new Date('2026-04-10T00:00:00Z');
 
 export interface PilotLimits {
   maxSenderIdentities: number;
   maxLeadsPerMonth: number;
 }
 
+// Pilot accounts now get full premium access
 export const PILOT_LIMITS: PilotLimits = {
-  maxSenderIdentities: 2,
-  maxLeadsPerMonth: 1000,
+  maxSenderIdentities: Infinity,
+  maxLeadsPerMonth: Infinity,
 };
 
 export function useSubscription() {
@@ -52,6 +56,25 @@ export function useSubscription() {
       });
       setLoading(false);
       return;
+    }
+
+    // Pilot accounts get 30-day premium access from renewal date
+    if (user.email && PILOT_ACCOUNTS.includes(user.email)) {
+      const expiresAt = new Date(PILOT_START_DATE);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      if (expiresAt > new Date()) {
+        setSubscription({
+          id: 'pilot',
+          plan: 'monthly',
+          status: 'active',
+          amount: 0,
+          started_at: PILOT_START_DATE.toISOString(),
+          expires_at: expiresAt.toISOString(),
+        });
+        setLoading(false);
+        return;
+      }
     }
 
     try {
