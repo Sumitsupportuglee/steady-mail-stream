@@ -25,9 +25,10 @@ export interface PilotLimits {
   maxLeadsPerMonth: number;
 }
 
+// Pilot accounts now get full premium access
 export const PILOT_LIMITS: PilotLimits = {
-  maxSenderIdentities: 2,
-  maxLeadsPerMonth: 1000,
+  maxSenderIdentities: Infinity,
+  maxLeadsPerMonth: Infinity,
 };
 
 export function useSubscription() {
@@ -55,6 +56,25 @@ export function useSubscription() {
       });
       setLoading(false);
       return;
+    }
+
+    // Pilot accounts get 30-day premium access from renewal date
+    if (user.email && PILOT_ACCOUNTS.includes(user.email)) {
+      const expiresAt = new Date(PILOT_START_DATE);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      if (expiresAt > new Date()) {
+        setSubscription({
+          id: 'pilot',
+          plan: 'monthly',
+          status: 'active',
+          amount: 0,
+          started_at: PILOT_START_DATE.toISOString(),
+          expires_at: expiresAt.toISOString(),
+        });
+        setLoading(false);
+        return;
+      }
     }
 
     try {
