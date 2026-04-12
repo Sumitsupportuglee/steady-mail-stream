@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useIsIndianUser } from '@/hooks/useGeoLocation';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle2, Crown, Loader2, Zap } from 'lucide-react';
+import { CheckCircle2, Crown, Loader2, Zap, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { PLANS, type PlanConfig } from '@/config/plans';
 
 declare global {
   interface Window {
@@ -16,49 +19,37 @@ declare global {
   }
 }
 
-const plans = [
-  {
-    id: 'monthly' as const,
-    name: 'Monthly',
-    price: '₹2,499',
-    priceNum: 2499,
-    period: '/month',
-    description: 'Perfect for getting started with cold email outreach',
-    features: [
-      'Unlimited email campaigns',
-      'Lead Finder with web scraping',
-      'Contact management',
-      'Open & click tracking',
-      'Domain verification',
-      'SMTP configuration',
-      'Real-time analytics',
-    ],
-  },
-  {
-    id: 'yearly' as const,
-    name: 'Yearly',
-    price: '₹24,999',
-    priceNum: 24999,
-    period: '/year',
-    badge: 'Save ₹4,989',
-    description: 'Best value for agencies scaling their outreach',
-    features: [
-      'Everything in Monthly',
-      'Priority support',
-      '2 months free',
-      'Unlimited email campaigns',
-      'Lead Finder with web scraping',
-      'Advanced analytics',
-      'Dedicated onboarding',
-    ],
-  },
-];
-
 export default function Pricing() {
   const { user } = useAuth();
   const { isActive, subscription, daysRemaining } = useSubscription();
+  const isIndian = useIsIndianUser();
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  if (isIndian === null) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const formatPrice = (plan: PlanConfig) => {
+    const prices = isIndian ? plan.pricing.inr : plan.pricing.usd;
+    const price = billingCycle === 'monthly' ? prices.monthly : prices.yearly;
+    const currency = isIndian ? '₹' : '$';
+    return `${currency}${price.toLocaleString()}`;
+  };
+
+  const getSavings = (plan: PlanConfig) => {
+    const prices = isIndian ? plan.pricing.inr : plan.pricing.usd;
+    const savings = (prices.monthly * 12) - prices.yearly;
+    const currency = isIndian ? '₹' : '$';
+    return savings > 0 ? `Save ${currency}${savings.toLocaleString()}` : null;
+  };
 
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -74,35 +65,37 @@ export default function Pricing() {
     });
   };
 
-  const handleSubscribe = async (plan: 'monthly' | 'yearly') => {
+  const handleSubscribe = async (planId: 'starter' | 'business') => {
     if (!user) {
       navigate('/auth');
       return;
     }
 
-    setLoadingPlan(plan);
+    const fullPlanId = `${planId}_${billingCycle}`;
+    setLoadingPlan(fullPlanId);
 
     try {
       const loaded = await loadRazorpayScript();
       if (!loaded) throw new Error('Failed to load payment gateway');
 
-      // Create order
       const { data, error } = await supabase.functions.invoke('razorpay', {
-        body: { action: 'create_order', plan },
+        body: { action: 'create_order', plan: fullPlanId, is_indian: isIndian },
       });
 
       if (error) throw error;
+
+      const planConfig = PLANS.find(p => p.id === planId)!;
 
       const options = {
         key: data.key_id,
         amount: data.amount,
         currency: data.currency,
         name: 'Senddot',
-        description: `${plan === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
+        description: `${planConfig.name} ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
         order_id: data.order_id,
         handler: async (response: any) => {
           try {
-            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('razorpay', {
+            const { error: verifyError } = await supabase.functions.invoke('razorpay', {
               body: {
                 action: 'verify_payment',
                 razorpay_order_id: response.razorpay_order_id,
@@ -115,7 +108,7 @@ export default function Pricing() {
 
             toast({
               title: '🎉 Subscription Activated!',
-              description: `Your ${plan} plan is now active. Enjoy all features!`,
+              description: `Your ${planConfig.name} ${billingCycle} plan is now active!`,
             });
 
             navigate('/dashboard');
@@ -127,15 +120,9 @@ export default function Pricing() {
             });
           }
         },
-        prefill: {
-          email: user.email,
-        },
-        theme: {
-          color: '#6366f1',
-        },
-        modal: {
-          ondismiss: () => setLoadingPlan(null),
-        },
+        prefill: { email: user.email },
+        theme: { color: '#6366f1' },
+        modal: { ondismiss: () => setLoadingPlan(null) },
       };
 
       const razorpay = new window.Razorpay(options);
@@ -150,6 +137,14 @@ export default function Pricing() {
       setLoadingPlan(null);
     }
   };
+
+  const getCurrentPlanTier = () => {
+    if (!subscription?.plan) return null;
+    if (subscription.plan.startsWith('business')) return 'business';
+    return 'starter';
+  };
+
+  const currentTier = getCurrentPlanTier();
 
   return (
     <AppLayout>
@@ -168,7 +163,7 @@ export default function Pricing() {
                 <Crown className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium">
-                    Active {subscription?.plan === 'yearly' ? 'Yearly' : 'Monthly'} Plan
+                    Active {currentTier === 'business' ? 'Business' : 'Starter'} Plan
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {daysRemaining} days remaining
@@ -180,21 +175,44 @@ export default function Pricing() {
           </Card>
         )}
 
+        {/* Billing Toggle */}
+        <div className="flex justify-center">
+          <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as 'monthly' | 'yearly')}>
+            <TabsList>
+              <TabsTrigger value="monthly">Monthly</TabsTrigger>
+              <TabsTrigger value="yearly" className="gap-1">
+                Yearly <Badge variant="secondary" className="text-xs ml-1">Save more</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
         <div className="grid gap-6 md:grid-cols-2">
-          {plans.map((plan) => {
-            const isCurrent = isActive && subscription?.plan === plan.id;
+          {PLANS.map((plan) => {
+            const isCurrent = isActive && currentTier === plan.id;
+            const fullPlanId = `${plan.id}_${billingCycle}`;
+            const savings = billingCycle === 'yearly' ? getSavings(plan) : null;
+
             return (
               <Card
                 key={plan.id}
                 className={`relative transition-shadow hover:shadow-lg ${
-                  plan.id === 'yearly' ? 'border-primary/50 shadow-md' : ''
+                  plan.id === 'business' ? 'border-primary/50 shadow-md' : ''
                 }`}
               >
-                {plan.badge && (
+                {plan.id === 'business' && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-primary text-primary-foreground px-3 py-1">
+                      <Rocket className="mr-1 h-3 w-3" />
+                      Most Popular
+                    </Badge>
+                  </div>
+                )}
+                {savings && (
+                  <div className="absolute -top-3 right-4">
+                    <Badge className="bg-green-600 text-white px-2 py-0.5 text-xs">
                       <Zap className="mr-1 h-3 w-3" />
-                      {plan.badge}
+                      {savings}
                     </Badge>
                   </div>
                 )}
@@ -202,8 +220,8 @@ export default function Pricing() {
                   <CardTitle className="text-xl">{plan.name}</CardTitle>
                   <CardDescription>{plan.description}</CardDescription>
                   <div className="mt-4">
-                    <span className="text-4xl font-bold">{plan.price}</span>
-                    <span className="text-muted-foreground">{plan.period}</span>
+                    <span className="text-4xl font-bold">{formatPrice(plan)}</span>
+                    <span className="text-muted-foreground">/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -217,14 +235,16 @@ export default function Pricing() {
                   </ul>
                   <Button
                     className="w-full"
-                    variant={plan.id === 'yearly' ? 'default' : 'outline'}
+                    variant={plan.id === 'business' ? 'default' : 'outline'}
                     disabled={isCurrent || !!loadingPlan}
                     onClick={() => handleSubscribe(plan.id)}
                   >
-                    {loadingPlan === plan.id ? (
+                    {loadingPlan === fullPlanId ? (
                       <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
                     ) : isCurrent ? (
                       'Current Plan'
+                    ) : isActive && currentTier === 'starter' && plan.id === 'business' ? (
+                      'Upgrade to Business'
                     ) : (
                       'Subscribe Now'
                     )}
