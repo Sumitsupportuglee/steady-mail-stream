@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription, PILOT_LIMITS } from '@/hooks/useSubscription';
+import { useSubscription } from '@/hooks/useSubscription';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,7 @@ interface SenderIdentity {
 
 export default function SenderIdentities() {
   const { user } = useAuth();
-  const { isPilotAccount } = useSubscription();
+  const { planLimits } = useSubscription();
   const { activeClientId } = useClient();
   const [identities, setIdentities] = useState<SenderIdentity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,10 +110,10 @@ export default function SenderIdentities() {
       return;
     }
 
-    if (isPilotAccount && identities.length >= PILOT_LIMITS.maxSenderIdentities) {
+    if (identities.length >= planLimits.maxSenderIdentities) {
       toast({
-        title: 'Pilot limit reached',
-        description: `Pilot accounts can add a maximum of ${PILOT_LIMITS.maxSenderIdentities} sender identities. Upgrade to a paid plan for unlimited identities.`,
+        title: 'Limit reached',
+        description: `Your plan allows a maximum of ${planLimits.maxSenderIdentities} sender identities. Upgrade your plan for more.`,
         variant: 'destructive',
       });
       return;

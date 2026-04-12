@@ -7,6 +7,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Plan pricing in smallest currency units
+const PLAN_PRICING: Record<string, { inr: number; usd: number }> = {
+  starter_monthly: { inr: 349900, usd: 4900 },
+  starter_yearly: { inr: 3499900, usd: 49900 },
+  business_monthly: { inr: 799900, usd: 13900 },
+  business_yearly: { inr: 7999900, usd: 139900 },
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -29,7 +37,6 @@ serve(async (req) => {
   try {
     const { action, ...body } = await req.json();
 
-    // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     const supabaseClient = createClient(
       SUPABASE_URL,
@@ -45,10 +52,19 @@ serve(async (req) => {
     }
 
     if (action === "create_order") {
-      const { plan } = body; // 'monthly' or 'yearly'
-      const amount = plan === "yearly" ? 2499900 : 249900; // paise
+      const { plan, is_indian } = body;
+      // plan: starter_monthly, starter_yearly, business_monthly, business_yearly
+      const pricing = PLAN_PRICING[plan];
+      if (!pricing) {
+        return new Response(JSON.stringify({ error: "Invalid plan" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-      // Create Razorpay order
+      const currency = is_indian ? "INR" : "USD";
+      const amount = is_indian ? pricing.inr : pricing.usd;
+
       const orderRes = await fetch("https://api.razorpay.com/v1/orders", {
         method: "POST",
         headers: {
@@ -57,7 +73,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           amount,
-          currency: "INR",
+          currency,
           receipt: `sub_${user.id.slice(0, 8)}_${Date.now()}`,
         }),
       });
@@ -69,20 +85,19 @@ serve(async (req) => {
 
       const order = await orderRes.json();
 
-      // Save pending subscription
       await supabaseAdmin.from("subscriptions").insert({
         user_id: user.id,
         plan,
         status: "pending",
         razorpay_order_id: order.id,
-        amount: amount / 100, // store in rupees
+        amount: amount / 100,
       });
 
       return new Response(
         JSON.stringify({
           order_id: order.id,
           amount,
-          currency: "INR",
+          currency,
           key_id: RAZORPAY_KEY_ID,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -92,7 +107,6 @@ serve(async (req) => {
     if (action === "verify_payment") {
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
 
-      // Verify signature using HMAC SHA256
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         "raw",
@@ -114,7 +128,6 @@ serve(async (req) => {
         });
       }
 
-      // Find the subscription
       const { data: sub } = await supabaseAdmin
         .from("subscriptions")
         .select("*")
@@ -131,13 +144,12 @@ serve(async (req) => {
 
       const now = new Date();
       const expiresAt = new Date(now);
-      if (sub.plan === "yearly") {
+      if (sub.plan.includes("yearly")) {
         expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       } else {
         expiresAt.setMonth(expiresAt.getMonth() + 1);
       }
 
-      // Update subscription to active
       await supabaseAdmin
         .from("subscriptions")
         .update({

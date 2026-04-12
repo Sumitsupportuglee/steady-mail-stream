@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription, PILOT_LIMITS } from '@/hooks/useSubscription';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useClient } from '@/contexts/ClientContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,7 +72,7 @@ interface Profile {
 
 export default function Settings() {
   const { user } = useAuth();
-  const { isPilotAccount } = useSubscription();
+  const { planLimits } = useSubscription();
   const { activeClientId } = useClient();
 
   const [loading, setLoading] = useState(true);
@@ -171,6 +171,10 @@ export default function Settings() {
       toast({ title: 'Missing fields', description: 'Fill all SMTP fields.', variant: 'destructive' });
       return;
     }
+    if (smtpAccounts.length >= planLimits.maxSmtp) {
+      toast({ title: 'Limit reached', description: `Your plan allows a maximum of ${planLimits.maxSmtp} SMTP accounts. Upgrade your plan for more.`, variant: 'destructive' });
+      return;
+    }
     setSmtpSaving(true);
     try {
       const isFirst = smtpAccounts.length === 0;
@@ -251,8 +255,8 @@ export default function Settings() {
       toast({ title: 'Select provider', description: 'Choose your email provider.', variant: 'destructive' });
       return;
     }
-    if (isPilotAccount && identities.length >= PILOT_LIMITS.maxSenderIdentities) {
-      toast({ title: 'Pilot limit reached', description: `Max ${PILOT_LIMITS.maxSenderIdentities} sender identities on pilot.`, variant: 'destructive' });
+    if (identities.length >= planLimits.maxSenderIdentities) {
+      toast({ title: 'Limit reached', description: `Your plan allows a maximum of ${planLimits.maxSenderIdentities} sender identities. Upgrade your plan for more.`, variant: 'destructive' });
       return;
     }
     setIdentitySaving(true);

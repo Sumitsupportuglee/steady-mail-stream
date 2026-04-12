@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPlanLimits } from '@/config/plans';
 
 interface Subscription {
   id: string;
@@ -20,17 +21,6 @@ const PILOT_ACCOUNTS = ['info@budfi.in'];
 // Pilot account start date (renewed on 2026-04-10)
 const PILOT_START_DATE = new Date('2026-04-10T00:00:00Z');
 
-export interface PilotLimits {
-  maxSenderIdentities: number;
-  maxLeadsPerMonth: number;
-}
-
-// Pilot accounts now get full premium access
-export const PILOT_LIMITS: PilotLimits = {
-  maxSenderIdentities: Infinity,
-  maxLeadsPerMonth: Infinity,
-};
-
 export function useSubscription() {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -48,7 +38,7 @@ export function useSubscription() {
     if (isDemoAccount) {
       setSubscription({
         id: 'demo',
-        plan: 'yearly',
+        plan: 'business_yearly',
         status: 'active',
         amount: 0,
         started_at: new Date().toISOString(),
@@ -66,7 +56,7 @@ export function useSubscription() {
       if (expiresAt > new Date()) {
         setSubscription({
           id: 'pilot',
-          plan: 'monthly',
+          plan: 'business_monthly',
           status: 'active',
           amount: 0,
           started_at: PILOT_START_DATE.toISOString(),
@@ -110,5 +100,15 @@ export function useSubscription() {
     ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  return { subscription, loading, isActive, daysRemaining, isPilotAccount, pilotLimits: isPilotAccount ? PILOT_LIMITS : null, refetch: fetchSubscription };
+  const planLimits = getPlanLimits(subscription?.plan);
+
+  return {
+    subscription,
+    loading,
+    isActive,
+    daysRemaining,
+    isPilotAccount,
+    planLimits,
+    refetch: fetchSubscription,
+  };
 }
