@@ -116,24 +116,7 @@ export default function LeadFinder() {
     e.preventDefault();
     if (!query.trim()) return;
 
-    // Enforce pilot lead limit
-    if (isPilotAccount && pilotLimits) {
-      const remaining = pilotLimits.maxLeadsPerMonth - leadsExtractedThisMonth;
-      if (remaining <= 0) {
-        toast({
-          title: 'Pilot limit reached',
-          description: `You have extracted ${leadsExtractedThisMonth} leads this month. Upgrade to a paid plan for unlimited leads.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-      if (leadLimit > remaining) {
-        toast({
-          title: 'Lead limit adjusted',
-          description: `You can only extract ${remaining} more leads this month on the pilot plan.`,
-        });
-      }
-    }
+    // Lead limits removed — unlimited for all paid plans
 
     setLoading(true);
     setLeads([]);
