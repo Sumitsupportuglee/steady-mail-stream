@@ -209,29 +209,10 @@ class SmtpClient {
   }
 }
 
-// --- DECRYPTION HELPER ---
+// --- PASSWORD HELPER (no encryption) ---
 
-async function getDecryptionKey(): Promise<CryptoKey> {
-  const keyHex = Deno.env.get('SMTP_ENCRYPTION_KEY')
-  if (!keyHex || keyHex.length < 32) {
-    throw new Error('SMTP_ENCRYPTION_KEY not configured')
-  }
-  const keyBytes = new TextEncoder().encode(keyHex.slice(0, 32))
-  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt'])
-}
-
-async function decryptPassword(encrypted: string): Promise<string> {
-  try {
-    const key = await getDecryptionKey()
-    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
-    const iv = combined.slice(0, 12)
-    const ciphertext = combined.slice(12)
-    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
-    return new TextDecoder().decode(decrypted)
-  } catch {
-    // If decryption fails, assume legacy plain-text password
-    return encrypted
-  }
+async function decryptPassword(plaintext: string): Promise<string> {
+  return plaintext
 }
 
 // --- SMTP CONFIG RESOLVER ---
