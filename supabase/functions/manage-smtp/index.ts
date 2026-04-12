@@ -5,52 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// --- AES-GCM Encryption Helpers ---
-
-async function getEncryptionKey(): Promise<CryptoKey> {
-  const keyHex = Deno.env.get('SMTP_ENCRYPTION_KEY')
-  if (!keyHex || keyHex.length < 32) {
-    throw new Error('SMTP_ENCRYPTION_KEY not configured or too short')
-  }
-  // Use first 32 bytes of the key string as raw key material
-  const keyBytes = new TextEncoder().encode(keyHex.slice(0, 32))
-  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
-}
-
-async function encrypt(plaintext: string): Promise<string> {
-  const key = await getEncryptionKey()
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const encoded = new TextEncoder().encode(plaintext)
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded)
-  
-  // Combine IV + ciphertext and base64 encode
-  const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length)
-  combined.set(iv)
-  combined.set(new Uint8Array(ciphertext), iv.length)
-  
-  return btoa(String.fromCharCode(...combined))
-}
-
-export async function decrypt(encrypted: string): Promise<string> {
-  const key = await getEncryptionKey()
-  const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
-  
-  const iv = combined.slice(0, 12)
-  const ciphertext = combined.slice(12)
-  
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
-  return new TextDecoder().decode(decrypted)
-}
-
-async function encryptIfNeeded(value: string): Promise<{ value: string; migrated: boolean }> {
-  try {
-    await decrypt(value)
-    return { value, migrated: false }
-  } catch {
-    return { value: await encrypt(value), migrated: true }
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -81,100 +35,25 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action } = body
 
-    if (action === 'migrate-legacy') {
-      let smtpAccountsMigrated = 0
-      let profilesMigrated = 0
-      let clientsMigrated = 0
-
-      const { data: smtpAccounts, error: smtpAccountsError } = await supabase
-        .from('smtp_accounts')
-        .select('id, smtp_password')
-        .eq('user_id', user.id)
-        .not('smtp_password', 'is', null)
-
-      if (smtpAccountsError) throw smtpAccountsError
-
-      for (const account of smtpAccounts || []) {
-        const { value, migrated } = await encryptIfNeeded(account.smtp_password)
-        if (!migrated) continue
-
-        const { error } = await supabase
-          .from('smtp_accounts')
-          .update({ smtp_password: value })
-          .eq('id', account.id)
-          .eq('user_id', user.id)
-
-        if (error) throw error
-        smtpAccountsMigrated += 1
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('smtp_password')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (profileError) throw profileError
-
-      if (profile?.smtp_password) {
-        const { value, migrated } = await encryptIfNeeded(profile.smtp_password)
-        if (migrated) {
-          const { error } = await supabase
-            .from('profiles')
-            .update({ smtp_password: value })
-            .eq('id', user.id)
-
-          if (error) throw error
-          profilesMigrated = 1
-        }
-      }
-
-      const { data: clients, error: clientsError } = await supabase
-        .from('clients')
-        .select('id, smtp_password')
-        .eq('user_id', user.id)
-        .not('smtp_password', 'is', null)
-
-      if (clientsError) throw clientsError
-
-      for (const client of clients || []) {
-        const { value, migrated } = await encryptIfNeeded(client.smtp_password)
-        if (!migrated) continue
-
-        const { error } = await supabase
-          .from('clients')
-          .update({ smtp_password: value })
-          .eq('id', client.id)
-          .eq('user_id', user.id)
-
-        if (error) throw error
-        clientsMigrated += 1
-      }
-
-      return new Response(JSON.stringify({
-        success: true,
-        migrated: {
-          smtp_accounts: smtpAccountsMigrated,
-          profiles: profilesMigrated,
-          clients: clientsMigrated,
-        },
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     if (action === 'encrypt') {
+      // No-op: return password as-is
       const { smtp_password } = body
-
       if (!smtp_password) {
         return new Response(JSON.stringify({ error: 'Missing SMTP password' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+      return new Response(JSON.stringify({ success: true, encrypted_password: smtp_password }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
-      const encryptedPassword = await encrypt(smtp_password)
-
-      return new Response(JSON.stringify({ success: true, encrypted_password: encryptedPassword }), {
+    if (action === 'migrate-legacy') {
+      // No-op: nothing to migrate without encryption
+      return new Response(JSON.stringify({
+        success: true,
+        migrated: { smtp_accounts: 0, profiles: 0, clients: 0 },
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -188,9 +67,6 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Encrypt the password
-      const encryptedPassword = await encrypt(smtp_password)
-
       const { data, error } = await supabase
         .from('smtp_accounts')
         .insert({
@@ -200,7 +76,7 @@ Deno.serve(async (req) => {
           smtp_host,
           smtp_port: smtp_port || 587,
           smtp_username,
-          smtp_password: encryptedPassword,
+          smtp_password,
           smtp_encryption: smtp_encryption || 'tls',
           is_default: is_default || false,
           client_id: client_id || null,
@@ -243,7 +119,7 @@ Deno.serve(async (req) => {
       if (updates.smtp_port) updateData.smtp_port = updates.smtp_port
       if (updates.smtp_username) updateData.smtp_username = updates.smtp_username
       if (updates.smtp_encryption) updateData.smtp_encryption = updates.smtp_encryption
-      if (smtp_password) updateData.smtp_password = await encrypt(smtp_password)
+      if (smtp_password) updateData.smtp_password = smtp_password
 
       const { error } = await supabase
         .from('smtp_accounts')
@@ -258,7 +134,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'decrypt') {
-      // Used by process-queue internally — returns decrypted password for a given smtp_account_id
       const { smtp_account_id } = body
 
       const { data: acct } = await supabase
@@ -273,15 +148,7 @@ Deno.serve(async (req) => {
         })
       }
 
-      let password: string
-      try {
-        password = await decrypt(acct.smtp_password)
-      } catch {
-        // If decryption fails, password might be stored in plain text (legacy)
-        password = acct.smtp_password
-      }
-
-      return new Response(JSON.stringify({ password }), {
+      return new Response(JSON.stringify({ password: acct.smtp_password }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
