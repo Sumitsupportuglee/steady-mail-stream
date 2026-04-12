@@ -171,6 +171,10 @@ export default function Settings() {
       toast({ title: 'Missing fields', description: 'Fill all SMTP fields.', variant: 'destructive' });
       return;
     }
+    if (smtpAccounts.length >= planLimits.maxSmtp) {
+      toast({ title: 'Limit reached', description: `Your plan allows a maximum of ${planLimits.maxSmtp} SMTP accounts. Upgrade your plan for more.`, variant: 'destructive' });
+      return;
+    }
     setSmtpSaving(true);
     try {
       const isFirst = smtpAccounts.length === 0;
