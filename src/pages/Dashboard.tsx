@@ -42,7 +42,7 @@ interface RecentCampaign {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { isActive, subscription, daysRemaining, isPilotAccount, loading: subLoading } = useSubscription();
+  const { isActive, subscription, daysRemaining, isPilotAccount, planLimits, loading: subLoading } = useSubscription();
   const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,8 +115,10 @@ export default function Dashboard() {
     );
   }
 
-  const totalDays = subscription?.plan === 'yearly' ? 365 : 30;
+  const isYearly = subscription?.plan?.includes('yearly');
+  const totalDays = isYearly ? 365 : 30;
   const progressPercent = isActive ? Math.max(0, (daysRemaining / totalDays) * 100) : 0;
+  const planLabel = subscription?.plan?.startsWith('business') ? 'Business' : 'Starter';
 
   return (
     <AppLayout>
@@ -158,7 +160,7 @@ export default function Dashboard() {
               </div>
               <Progress value={Math.max(0, (daysRemaining / 30) * 100)} className="h-2" />
               <p className="text-xs text-muted-foreground mt-2">
-                Limits: 2 sender identities · 1,000 leads/month
+                Limits: {planLimits.maxSenderIdentities} sender identities · {planLimits.maxSmtp} SMTP accounts
               </p>
             </CardContent>
           </Card>
@@ -173,7 +175,7 @@ export default function Dashboard() {
                   <Crown className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-semibold">
-                      {subscription?.plan === 'yearly' ? 'Yearly' : 'Monthly'} Plan
+                      {planLabel} {isYearly ? 'Yearly' : 'Monthly'} Plan
                     </p>
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" />
