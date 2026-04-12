@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription, PILOT_LIMITS } from '@/hooks/useSubscription';
+import { useSubscription } from '@/hooks/useSubscription';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,7 +77,7 @@ export default function LeadFinder() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { activeClientId } = useClient();
-  const { isActive, isPilotAccount, pilotLimits, loading: subLoading } = useSubscription();
+  const { isActive, isPilotAccount, loading: subLoading } = useSubscription();
   const [leadsExtractedThisMonth, setLeadsExtractedThisMonth] = useState<number>(0);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<'search' | 'url'>('search');
