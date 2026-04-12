@@ -1034,7 +1034,13 @@ export type Database = {
         | "closed"
       domain_status_type: "unverified" | "verified"
       email_status_type: "pending" | "sent" | "failed"
-      subscription_plan_type: "monthly" | "yearly"
+      subscription_plan_type:
+        | "monthly"
+        | "yearly"
+        | "starter_monthly"
+        | "starter_yearly"
+        | "business_monthly"
+        | "business_yearly"
       subscription_status_type: "active" | "expired" | "cancelled" | "pending"
       tier_type: "starter" | "growth"
     }
@@ -1176,7 +1182,14 @@ export const Constants = {
       ],
       domain_status_type: ["unverified", "verified"],
       email_status_type: ["pending", "sent", "failed"],
-      subscription_plan_type: ["monthly", "yearly"],
+      subscription_plan_type: [
+        "monthly",
+        "yearly",
+        "starter_monthly",
+        "starter_yearly",
+        "business_monthly",
+        "business_yearly",
+      ],
       subscription_status_type: ["active", "expired", "cancelled", "pending"],
       tier_type: ["starter", "growth"],
     },
