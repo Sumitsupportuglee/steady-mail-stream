@@ -39,11 +39,12 @@ export default function CRM() {
   const { user } = useAuth();
   const { activeClientId } = useClient();
   const [stats, setStats] = useState<CampaignStats>({
-    contacted: 0, delivered: 0, opened: 0, clicked: 0,
+    contacted: 0, delivered: 0, opened: 0, clicked: 0, unsubscribed: 0,
     totalOpens: 0, totalClicks: 0,
-    contactedEmails: [], openedEmails: [], clickedEmails: [],
+    contactedEmails: [], openedEmails: [], clickedEmails: [], unsubscribedEmails: [],
   });
   const [clickFeed, setClickFeed] = useState<ClickEvent[]>([]);
+  const [unsubFeed, setUnsubFeed] = useState<UnsubEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
