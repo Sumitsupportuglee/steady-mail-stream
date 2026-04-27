@@ -507,7 +507,30 @@ Deno.serve(async (req) => {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
             try {
-              const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
+              // Suppression: skip recipients who unsubscribed from this user's mail
+              const { data: optedOut } = await supabase
+                .from('email_unsubscribes')
+                .select('id')
+                .eq('user_id', email.user_id)
+                .ilike('email', email.to_email)
+                .maybeSingle()
+
+              if (optedOut) {
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    error_log: 'Recipient has unsubscribed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
+              const token = await unsubscribeToken(email.id, supabaseServiceKey)
+              const unsubUrl = buildUnsubscribeUrl(supabaseUrl, email.id, token)
+              const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
               // Resolve sender display name (cached per campaign)
               let fromName: string | undefined
@@ -537,7 +560,8 @@ Deno.serve(async (req) => {
                 email.to_email,
                 email.subject,
                 trackedBody,
-                fromName
+                fromName,
+                unsubUrl
               )
 
               await supabase
