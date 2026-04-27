@@ -5,16 +5,25 @@ import { useClient } from '@/contexts/ClientContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick } from 'lucide-react';
+import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink } from 'lucide-react';
 
 interface CampaignStats {
   contacted: number;
   delivered: number;
-  opened: number;
-  clicked: number;
+  opened: number;       // unique openers
+  clicked: number;      // unique clickers
+  totalOpens: number;   // every open event
+  totalClicks: number;  // every click event
   contactedEmails: string[];
   openedEmails: string[];
   clickedEmails: string[];
+}
+
+interface ClickEvent {
+  id: string;
+  to_email: string;
+  original_url: string;
+  clicked_at: string;
 }
 
 export default function CRM() {
@@ -22,39 +31,53 @@ export default function CRM() {
   const { activeClientId } = useClient();
   const [stats, setStats] = useState<CampaignStats>({
     contacted: 0, delivered: 0, opened: 0, clicked: 0,
+    totalOpens: 0, totalClicks: 0,
     contactedEmails: [], openedEmails: [], clickedEmails: [],
   });
+  const [clickFeed, setClickFeed] = useState<ClickEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
     if (!user) return;
     try {
-      // Contacted: all emails sent
-      let queueQuery = supabase
-        .from('email_queue')
-        .select('to_email, status')
-        .eq('user_id', user.id)
-        .eq('status', 'sent');
+      // Optional client scoping
+      let scopedCampaignIds: string[] | null = null;
       if (activeClientId) {
         const { data: campaigns } = await supabase
           .from('campaigns')
           .select('id')
           .eq('user_id', user.id)
           .eq('client_id', activeClientId);
-        if (campaigns && campaigns.length > 0) {
-          queueQuery = queueQuery.in('campaign_id', campaigns.map(c => c.id));
+        scopedCampaignIds = (campaigns || []).map(c => c.id);
+        if (scopedCampaignIds.length === 0) {
+          setStats({
+            contacted: 0, delivered: 0, opened: 0, clicked: 0,
+            totalOpens: 0, totalClicks: 0,
+            contactedEmails: [], openedEmails: [], clickedEmails: [],
+          });
+          setClickFeed([]);
+          setLoading(false);
+          return;
         }
       }
+
+      // Sent emails
+      let queueQuery = supabase
+        .from('email_queue')
+        .select('id, to_email, status')
+        .eq('user_id', user.id)
+        .eq('status', 'sent');
+      if (scopedCampaignIds) queueQuery = queueQuery.in('campaign_id', scopedCampaignIds);
       const { data: sentEmails } = await queueQuery;
 
-      // Opened: unique contacts who opened
+      // Opens
       let opensQuery = supabase
         .from('email_opens')
         .select('email_queue_id')
         .eq('user_id', user.id);
+      if (scopedCampaignIds) opensQuery = opensQuery.in('campaign_id', scopedCampaignIds);
       const { data: opens } = await opensQuery;
 
-      // Get emails for opened queue IDs
       let openedEmails: string[] = [];
       if (opens && opens.length > 0) {
         const uniqueQueueIds = [...new Set(opens.map(o => o.email_queue_id))];
@@ -65,22 +88,42 @@ export default function CRM() {
         openedEmails = [...new Set((openedQueue || []).map(q => q.to_email))];
       }
 
-      // Clicked: unique contacts who clicked
+      // Clicks (every event, ordered most recent first)
       let clicksQuery = supabase
         .from('email_clicks')
-        .select('email_queue_id')
-        .eq('user_id', user.id);
+        .select('id, email_queue_id, original_url, clicked_at')
+        .eq('user_id', user.id)
+        .order('clicked_at', { ascending: false })
+        .limit(100);
+      if (scopedCampaignIds) clicksQuery = clicksQuery.in('campaign_id', scopedCampaignIds);
       const { data: clicks } = await clicksQuery;
 
       let clickedEmails: string[] = [];
+      let feed: ClickEvent[] = [];
       if (clicks && clicks.length > 0) {
         const uniqueClickQueueIds = [...new Set(clicks.map(c => c.email_queue_id))];
         const { data: clickedQueue } = await supabase
           .from('email_queue')
-          .select('to_email')
+          .select('id, to_email')
           .in('id', uniqueClickQueueIds);
+        const idToEmail = new Map((clickedQueue || []).map(q => [q.id, q.to_email]));
         clickedEmails = [...new Set((clickedQueue || []).map(q => q.to_email))];
+        feed = clicks.map(c => ({
+          id: c.id,
+          to_email: idToEmail.get(c.email_queue_id) || 'unknown',
+          original_url: c.original_url,
+          clicked_at: c.clicked_at,
+        }));
       }
+
+      // Totals (head:true for accurate counts even past 1000-row default)
+      let totalOpensQ = supabase.from('email_opens').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+      let totalClicksQ = supabase.from('email_clicks').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+      if (scopedCampaignIds) {
+        totalOpensQ = totalOpensQ.in('campaign_id', scopedCampaignIds);
+        totalClicksQ = totalClicksQ.in('campaign_id', scopedCampaignIds);
+      }
+      const [{ count: totalOpens }, { count: totalClicks }] = await Promise.all([totalOpensQ, totalClicksQ]);
 
       const contactedEmails = [...new Set((sentEmails || []).map(e => e.to_email))];
 
@@ -89,10 +132,13 @@ export default function CRM() {
         delivered: (sentEmails || []).length,
         opened: openedEmails.length,
         clicked: clickedEmails.length,
+        totalOpens: totalOpens || 0,
+        totalClicks: totalClicks || 0,
         contactedEmails,
         openedEmails,
         clickedEmails,
       });
+      setClickFeed(feed);
     } catch (error) {
       console.error('Error fetching CRM stats:', error);
     } finally {
@@ -106,12 +152,15 @@ export default function CRM() {
     // Realtime subscriptions for live updates
     const channels = [
       supabase.channel('crm-queue').on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, () => fetchStats()).subscribe(),
-      supabase.channel('crm-opens').on('postgres_changes', { event: '*', schema: 'public', table: 'email_opens' }, () => fetchStats()).subscribe(),
-      supabase.channel('crm-clicks').on('postgres_changes', { event: '*', schema: 'public', table: 'email_clicks' }, () => fetchStats()).subscribe(),
+      supabase.channel('crm-opens').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_opens' }, () => fetchStats()).subscribe(),
+      supabase.channel('crm-clicks').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_clicks' }, () => fetchStats()).subscribe(),
     ];
 
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
   }, [fetchStats]);
+
+  const openRate = stats.delivered > 0 ? ((stats.totalOpens / stats.delivered) * 100).toFixed(1) : '0.0';
+  const clickRate = stats.delivered > 0 ? ((stats.totalClicks / stats.delivered) * 100).toFixed(1) : '0.0';
 
   const CARDS = [
     {
@@ -132,11 +181,11 @@ export default function CRM() {
       color: 'text-green-500',
       bgColor: 'bg-green-500/10',
       borderColor: 'border-green-500/20',
-      items: null, // numbers only
+      items: null,
     },
     {
       title: 'Opened',
-      description: 'Contacts who opened the email',
+      description: `${stats.totalOpens} total opens • ${openRate}% rate`,
       value: stats.opened,
       icon: MailOpen,
       color: 'text-amber-500',
@@ -146,7 +195,7 @@ export default function CRM() {
     },
     {
       title: 'Clicked',
-      description: 'Contacts who clicked a link',
+      description: `${stats.totalClicks} total clicks • ${clickRate}% rate`,
       value: stats.clicked,
       icon: MousePointerClick,
       color: 'text-purple-500',
@@ -197,6 +246,49 @@ export default function CRM() {
             </Card>
           ))}
         </div>
+
+        {/* Live Click Feed */}
+        <Card className="border border-purple-500/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <MousePointerClick className="h-4 w-4 text-purple-500" />
+              Recent Clicks (live)
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {clickFeed.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {clickFeed.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No clicks yet</p>
+            ) : (
+              <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                {clickFeed.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                    <span className="font-medium truncate min-w-0 flex-1">{c.to_email}</span>
+                    <a
+                      href={c.original_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-purple-500 truncate max-w-[40%]"
+                      title={c.original_url}
+                    >
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{c.original_url}</span>
+                    </a>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {new Date(c.clicked_at).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Detail Lists */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
