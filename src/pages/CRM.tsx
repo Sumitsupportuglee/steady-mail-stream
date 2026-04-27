@@ -61,11 +61,12 @@ export default function CRM() {
         scopedCampaignIds = (campaigns || []).map(c => c.id);
         if (scopedCampaignIds.length === 0) {
           setStats({
-            contacted: 0, delivered: 0, opened: 0, clicked: 0,
+            contacted: 0, delivered: 0, opened: 0, clicked: 0, unsubscribed: 0,
             totalOpens: 0, totalClicks: 0,
-            contactedEmails: [], openedEmails: [], clickedEmails: [],
+            contactedEmails: [], openedEmails: [], clickedEmails: [], unsubscribedEmails: [],
           });
           setClickFeed([]);
+          setUnsubFeed([]);
           setLoading(false);
           return;
         }
