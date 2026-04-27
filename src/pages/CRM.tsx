@@ -232,6 +232,16 @@ export default function CRM() {
       borderColor: 'border-purple-500/20',
       items: stats.clickedEmails,
     },
+    {
+      title: 'Unsubscribed',
+      description: 'Recipients who opted out — never contacted again',
+      value: stats.unsubscribed,
+      icon: UserMinus,
+      color: 'text-red-500',
+      bgColor: 'bg-red-500/10',
+      borderColor: 'border-red-500/20',
+      items: stats.unsubscribedEmails,
+    },
   ];
 
   if (loading) {
