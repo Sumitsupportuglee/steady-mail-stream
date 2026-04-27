@@ -286,48 +286,69 @@ export default function CRM() {
           ))}
         </div>
 
-        {/* Live Click Feed */}
-        <Card className="border border-purple-500/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <MousePointerClick className="h-4 w-4 text-purple-500" />
-              Recent Clicks (live)
-              <Badge variant="secondary" className="ml-auto text-xs">
-                {clickFeed.length}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {clickFeed.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No clicks yet</p>
-            ) : (
-              <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
-                {clickFeed.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50"
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-                    <span className="font-medium truncate min-w-0 flex-1">{c.to_email}</span>
-                    <a
-                      href={c.original_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-purple-500 truncate max-w-[40%]"
-                      title={c.original_url}
-                    >
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{c.original_url}</span>
-                    </a>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {new Date(c.clicked_at).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Live Activity Feeds */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border border-purple-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <MousePointerClick className="h-4 w-4 text-purple-500" />
+                Recent Clicks (live)
+                <Badge variant="secondary" className="ml-auto text-xs">{clickFeed.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {clickFeed.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No clicks yet</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {clickFeed.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                      <span className="font-medium truncate min-w-0 flex-1">{c.to_email}</span>
+                      <a href={c.original_url} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-purple-500 truncate max-w-[40%]"
+                         title={c.original_url}>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{c.original_url}</span>
+                      </a>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(c.clicked_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-red-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <UserMinus className="h-4 w-4 text-red-500" />
+                Recent Unsubscribes (live)
+                <Badge variant="secondary" className="ml-auto text-xs">{unsubFeed.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {unsubFeed.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No unsubscribes yet</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {unsubFeed.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                      <span className="font-medium truncate min-w-0 flex-1">{u.email}</span>
+                      <Badge variant="outline" className="text-xs border-red-500/30 text-red-500">opted out</Badge>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(u.unsubscribed_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Detail Lists */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
