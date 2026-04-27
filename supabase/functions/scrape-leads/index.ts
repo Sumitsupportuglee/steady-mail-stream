@@ -322,7 +322,20 @@ Deno.serve(async (req) => {
 
     // Trim to requested limit
     const trimmedLeads = leads.slice(0, limit);
-    console.log(`Returning ${trimmedLeads.length} leads (requested: ${limit})`);
+
+    // AI-powered email validation pass — fix any mangled addresses
+    console.log(`Running AI email validation on ${trimmedLeads.length} leads`);
+    await Promise.all(
+      trimmedLeads.map(async (lead) => {
+        if (lead.emails.length > 0) {
+          lead.emails = await aiValidateEmails(lead.emails);
+        }
+      })
+    );
+
+    // Drop leads that have no valid emails AND no phones after cleanup
+    const finalLeads = trimmedLeads.filter(l => l.emails.length > 0 || l.phones.length > 0);
+    console.log(`Returning ${finalLeads.length} leads (requested: ${limit})`);
 
     return new Response(
       JSON.stringify({ success: true, leads: trimmedLeads }),
