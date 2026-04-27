@@ -136,6 +136,20 @@ export default function CRM() {
       }
       const [{ count: totalOpens }, { count: totalClicks }] = await Promise.all([totalOpensQ, totalClicksQ]);
 
+      // Unsubscribes
+      let unsubQuery = supabase
+        .from('email_unsubscribes')
+        .select('id, email, unsubscribed_at, campaign_id')
+        .eq('user_id', user.id)
+        .order('unsubscribed_at', { ascending: false })
+        .limit(100);
+      if (scopedCampaignIds) unsubQuery = unsubQuery.in('campaign_id', scopedCampaignIds);
+      const { data: unsubs } = await unsubQuery;
+      const unsubFeedData: UnsubEvent[] = (unsubs || []).map(u => ({
+        id: u.id, email: u.email, unsubscribed_at: u.unsubscribed_at, campaign_id: u.campaign_id,
+      }));
+      const unsubscribedEmails = [...new Set(unsubFeedData.map(u => u.email))];
+
       const contactedEmails = [...new Set((sentEmails || []).map(e => e.to_email))];
 
       setStats({
@@ -143,13 +157,16 @@ export default function CRM() {
         delivered: (sentEmails || []).length,
         opened: openedEmails.length,
         clicked: clickedEmails.length,
+        unsubscribed: unsubscribedEmails.length,
         totalOpens: totalOpens || 0,
         totalClicks: totalClicks || 0,
         contactedEmails,
         openedEmails,
         clickedEmails,
+        unsubscribedEmails,
       });
       setClickFeed(feed);
+      setUnsubFeed(unsubFeedData);
     } catch (error) {
       console.error('Error fetching CRM stats:', error);
     } finally {
