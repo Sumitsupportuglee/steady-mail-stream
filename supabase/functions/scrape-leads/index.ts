@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
     console.log(`Returning ${finalLeads.length} leads (requested: ${limit})`);
 
     return new Response(
-      JSON.stringify({ success: true, leads: trimmedLeads }),
+      JSON.stringify({ success: true, leads: finalLeads }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
