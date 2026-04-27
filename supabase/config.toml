@@ -24,3 +24,7 @@ verify_jwt = false
 [functions.trigger-webhook]
 verify_jwt = false
 
+[functions.unsubscribe]
+verify_jwt = false
+
+

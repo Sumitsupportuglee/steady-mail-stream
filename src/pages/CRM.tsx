@@ -5,18 +5,20 @@ import { useClient } from '@/contexts/ClientContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink } from 'lucide-react';
+import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink, UserMinus } from 'lucide-react';
 
 interface CampaignStats {
   contacted: number;
   delivered: number;
   opened: number;       // unique openers
   clicked: number;      // unique clickers
+  unsubscribed: number; // unique unsubscribers
   totalOpens: number;   // every open event
   totalClicks: number;  // every click event
   contactedEmails: string[];
   openedEmails: string[];
   clickedEmails: string[];
+  unsubscribedEmails: string[];
 }
 
 interface ClickEvent {
@@ -26,15 +28,23 @@ interface ClickEvent {
   clicked_at: string;
 }
 
+interface UnsubEvent {
+  id: string;
+  email: string;
+  unsubscribed_at: string;
+  campaign_id: string | null;
+}
+
 export default function CRM() {
   const { user } = useAuth();
   const { activeClientId } = useClient();
   const [stats, setStats] = useState<CampaignStats>({
-    contacted: 0, delivered: 0, opened: 0, clicked: 0,
+    contacted: 0, delivered: 0, opened: 0, clicked: 0, unsubscribed: 0,
     totalOpens: 0, totalClicks: 0,
-    contactedEmails: [], openedEmails: [], clickedEmails: [],
+    contactedEmails: [], openedEmails: [], clickedEmails: [], unsubscribedEmails: [],
   });
   const [clickFeed, setClickFeed] = useState<ClickEvent[]>([]);
+  const [unsubFeed, setUnsubFeed] = useState<UnsubEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
@@ -51,11 +61,12 @@ export default function CRM() {
         scopedCampaignIds = (campaigns || []).map(c => c.id);
         if (scopedCampaignIds.length === 0) {
           setStats({
-            contacted: 0, delivered: 0, opened: 0, clicked: 0,
+            contacted: 0, delivered: 0, opened: 0, clicked: 0, unsubscribed: 0,
             totalOpens: 0, totalClicks: 0,
-            contactedEmails: [], openedEmails: [], clickedEmails: [],
+            contactedEmails: [], openedEmails: [], clickedEmails: [], unsubscribedEmails: [],
           });
           setClickFeed([]);
+          setUnsubFeed([]);
           setLoading(false);
           return;
         }
@@ -125,6 +136,20 @@ export default function CRM() {
       }
       const [{ count: totalOpens }, { count: totalClicks }] = await Promise.all([totalOpensQ, totalClicksQ]);
 
+      // Unsubscribes
+      let unsubQuery = supabase
+        .from('email_unsubscribes')
+        .select('id, email, unsubscribed_at, campaign_id')
+        .eq('user_id', user.id)
+        .order('unsubscribed_at', { ascending: false })
+        .limit(100);
+      if (scopedCampaignIds) unsubQuery = unsubQuery.in('campaign_id', scopedCampaignIds);
+      const { data: unsubs } = await unsubQuery;
+      const unsubFeedData: UnsubEvent[] = (unsubs || []).map(u => ({
+        id: u.id, email: u.email, unsubscribed_at: u.unsubscribed_at, campaign_id: u.campaign_id,
+      }));
+      const unsubscribedEmails = [...new Set(unsubFeedData.map(u => u.email))];
+
       const contactedEmails = [...new Set((sentEmails || []).map(e => e.to_email))];
 
       setStats({
@@ -132,13 +157,16 @@ export default function CRM() {
         delivered: (sentEmails || []).length,
         opened: openedEmails.length,
         clicked: clickedEmails.length,
+        unsubscribed: unsubscribedEmails.length,
         totalOpens: totalOpens || 0,
         totalClicks: totalClicks || 0,
         contactedEmails,
         openedEmails,
         clickedEmails,
+        unsubscribedEmails,
       });
       setClickFeed(feed);
+      setUnsubFeed(unsubFeedData);
     } catch (error) {
       console.error('Error fetching CRM stats:', error);
     } finally {
@@ -154,6 +182,7 @@ export default function CRM() {
       supabase.channel('crm-queue').on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, () => fetchStats()).subscribe(),
       supabase.channel('crm-opens').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_opens' }, () => fetchStats()).subscribe(),
       supabase.channel('crm-clicks').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_clicks' }, () => fetchStats()).subscribe(),
+      supabase.channel('crm-unsubs').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_unsubscribes' }, () => fetchStats()).subscribe(),
     ];
 
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
@@ -203,6 +232,16 @@ export default function CRM() {
       borderColor: 'border-purple-500/20',
       items: stats.clickedEmails,
     },
+    {
+      title: 'Unsubscribed',
+      description: 'Recipients who opted out — never contacted again',
+      value: stats.unsubscribed,
+      icon: UserMinus,
+      color: 'text-red-500',
+      bgColor: 'bg-red-500/10',
+      borderColor: 'border-red-500/20',
+      items: stats.unsubscribedEmails,
+    },
   ];
 
   if (loading) {
@@ -226,7 +265,7 @@ export default function CRM() {
         </div>
 
         {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {CARDS.map((card) => (
             <Card key={card.title} className={`border ${card.borderColor}`}>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -247,48 +286,69 @@ export default function CRM() {
           ))}
         </div>
 
-        {/* Live Click Feed */}
-        <Card className="border border-purple-500/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <MousePointerClick className="h-4 w-4 text-purple-500" />
-              Recent Clicks (live)
-              <Badge variant="secondary" className="ml-auto text-xs">
-                {clickFeed.length}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {clickFeed.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No clicks yet</p>
-            ) : (
-              <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
-                {clickFeed.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50"
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-                    <span className="font-medium truncate min-w-0 flex-1">{c.to_email}</span>
-                    <a
-                      href={c.original_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-purple-500 truncate max-w-[40%]"
-                      title={c.original_url}
-                    >
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{c.original_url}</span>
-                    </a>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {new Date(c.clicked_at).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Live Activity Feeds */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border border-purple-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <MousePointerClick className="h-4 w-4 text-purple-500" />
+                Recent Clicks (live)
+                <Badge variant="secondary" className="ml-auto text-xs">{clickFeed.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {clickFeed.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No clicks yet</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {clickFeed.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                      <span className="font-medium truncate min-w-0 flex-1">{c.to_email}</span>
+                      <a href={c.original_url} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-purple-500 truncate max-w-[40%]"
+                         title={c.original_url}>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{c.original_url}</span>
+                      </a>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(c.clicked_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-red-500/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <UserMinus className="h-4 w-4 text-red-500" />
+                Recent Unsubscribes (live)
+                <Badge variant="secondary" className="ml-auto text-xs">{unsubFeed.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {unsubFeed.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No unsubscribes yet</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {unsubFeed.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 text-sm py-2 px-3 rounded-md bg-muted/50">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                      <span className="font-medium truncate min-w-0 flex-1">{u.email}</span>
+                      <Badge variant="outline" className="text-xs border-red-500/30 text-red-500">opted out</Badge>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(u.unsubscribed_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Detail Lists */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

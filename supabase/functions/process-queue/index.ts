@@ -126,7 +126,8 @@ class SmtpClient {
     to: string,
     subject: string,
     htmlBody: string,
-    fromName?: string
+    fromName?: string,
+    unsubscribeUrl?: string
   ): Promise<string> {
     const cleanFrom = from.match(/<(.+)>/)?.[1] || from
     const domain = cleanFrom.split('@')[1]
@@ -147,6 +148,10 @@ class SmtpClient {
     const date = new Date().toUTCString()
     const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
 
+    const listUnsub = unsubscribeUrl
+      ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
+      : `<mailto:unsubscribe@${domain}>`
+
     const headers = [
       `From: ${senderDisplay}`,
       `To: ${to}`,
@@ -156,7 +161,8 @@ class SmtpClient {
       `MIME-Version: 1.0`,
       `Content-Type: text/html; charset=UTF-8`,
       `Content-Transfer-Encoding: quoted-printable`,
-      `List-Unsubscribe: <mailto:unsubscribe@${domain}>`,
+      `List-Unsubscribe: ${listUnsub}`,
+      ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
       `X-Mailer: SteadyMail/1.0`,
     ]
 
@@ -335,14 +341,32 @@ async function updateCampaignStatuses(
   }
 }
 
-// --- TRACKING INJECTION ---
+// --- TRACKING + UNSUBSCRIBE INJECTION ---
 
-function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string): string {
+async function unsubscribeToken(emailQueueId: string, secret: string): Promise<string> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(emailQueueId))
+  const bytes = new Uint8Array(sig)
+  let hex = ''
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+  return hex.slice(0, 32)
+}
+
+function buildUnsubscribeUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
+  return `${supabaseUrl}/functions/v1/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
+}
+
+function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string, unsubscribeUrl: string): string {
   let body = htmlBody
 
   body = body.replace(
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url) => {
+      // Don't wrap the unsubscribe link in click tracking
+      if (url === unsubscribeUrl) return `href="${url}"`
       const trackUrl = `${supabaseUrl}/functions/v1/track-click?id=${encodeURIComponent(emailQueueId)}&url=${encodeURIComponent(url)}`
       return `href="${trackUrl}"`
     }
@@ -351,10 +375,18 @@ function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: str
   const pixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${encodeURIComponent(emailQueueId)}`
   const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
 
+  const footer = `
+    <table role="presentation" width="100%" style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">
+      <tr><td style="text-align:center;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;color:#6b7280;line-height:1.5">
+        Don't want to receive these emails?
+        <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline">Unsubscribe</a>
+      </td></tr>
+    </table>`
+
   if (body.includes('</body>')) {
-    body = body.replace('</body>', `${pixel}</body>`)
+    body = body.replace('</body>', `${footer}${pixel}</body>`)
   } else {
-    body += pixel
+    body += footer + pixel
   }
 
   return body
@@ -475,7 +507,30 @@ Deno.serve(async (req) => {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
             try {
-              const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
+              // Suppression: skip recipients who unsubscribed from this user's mail
+              const { data: optedOut } = await supabase
+                .from('email_unsubscribes')
+                .select('id')
+                .eq('user_id', email.user_id)
+                .ilike('email', email.to_email)
+                .maybeSingle()
+
+              if (optedOut) {
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    error_log: 'Recipient has unsubscribed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
+              const token = await unsubscribeToken(email.id, supabaseServiceKey)
+              const unsubUrl = buildUnsubscribeUrl(supabaseUrl, email.id, token)
+              const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
               // Resolve sender display name (cached per campaign)
               let fromName: string | undefined
@@ -505,7 +560,8 @@ Deno.serve(async (req) => {
                 email.to_email,
                 email.subject,
                 trackedBody,
-                fromName
+                fromName,
+                unsubUrl
               )
 
               await supabase
