@@ -5,7 +5,7 @@ import { useClient } from '@/contexts/ClientContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink } from 'lucide-react';
+import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink, UserMinus } from 'lucide-react';
 
 interface CampaignStats {
   contacted: number;
