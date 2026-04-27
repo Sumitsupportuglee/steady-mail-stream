@@ -1,50 +1,68 @@
+## Goal
 
+Every campaign email gets a working unsubscribe link. When a recipient clicks it, they are recorded as opted-out, blocked from any future sends, and shown clearly in the CRM as "Unsubscribed" — so no further outreach is made by mistake.
 
-## Plan: Email Provider Selection, SMTP Presets Expansion, and Setup Instructions
+## What the user will see
 
-### Overview
-Three changes: (1) Add email provider dropdown to Sender Identities dialog that controls whether DNS verification is needed, (2) expand SMTP presets with more US providers, (3) add expandable instruction cards to both pages.
+- Each outgoing email has an "Unsubscribe" footer link.
+- Clicking it opens a confirmation page that records the opt-out (no login needed).
+- In the CRM, those contacts get a red "Unsubscribed" badge and move to a new "Unsubscribed" stage. They are filterable, and excluded from any new campaign by default.
+- A new "Unsubscribed" stat card on the CRM and a "Recent Unsubscribes" feed (mirroring "Recent Clicks").
+- When building a new campaign in the wizard, unsubscribed contacts are automatically skipped from the recipient count, with a notice "X contacts skipped (unsubscribed)".
 
-### 1. Sender Identities — Email Provider Dropdown (`src/pages/SenderIdentities.tsx`)
+## Implementation
 
-- Add a `Select` dropdown in the "Add Identity" dialog with options: **Gmail**, **Yahoo**, **Outlook**, **Other**
-- Store the selected provider in a new state variable `emailProvider`
-- Save the provider value to a new column `email_provider` on the `sender_identities` table (migration needed)
-- **Gmail/Yahoo/Outlook**: After adding, show a success message: "No DNS configuration is needed for this provider. Your identity is ready to use." Auto-set `domain_status` to `verified`.
-- **Other**: Show the existing DNS verification flow (CNAME record + verify button). Set `domain_status` to `unverified`.
-- In the DNS Configuration panel on the right, conditionally show: if provider is Gmail/Yahoo/Outlook, show "No DNS setup required" info card instead of DNS records.
+### 1. Database (migration)
+- Add `unsubscribed` value to the existing `crm_stage_type` enum.
+- Create a new `email_unsubscribes` table:
+  - `id`, `user_id`, `contact_id` (nullable), `campaign_id` (nullable), `email_queue_id` (nullable), `email` (text, indexed), `reason` (text, optional), `ip_address`, `user_agent`, `unsubscribed_at`.
+  - RLS: users can SELECT their own rows; service role can INSERT.
+- Add trigger `auto_unsubscribe_on_optout`: on insert into `email_unsubscribes`, set the matching `contacts.status` to `'unsubscribed'` and the matching `crm_leads.stage` to `'unsubscribed'` (scoped to that user_id + email).
+- Enable realtime on `email_unsubscribes` so the CRM updates live.
 
-**Database migration**: Add `email_provider` text column (nullable, default null) to `sender_identities`.
+### 2. New edge function: `unsubscribe`
+- Public (no JWT). GET `/unsubscribe?id=<email_queue_id>&token=<hmac>`.
+- Validates token (HMAC of `email_queue_id` using `SUPABASE_SERVICE_ROLE_KEY` as secret) to prevent spoofed opt-outs.
+- Looks up the `email_queue` row → resolves `user_id`, `to_email`, `campaign_id`, `contact_id`.
+- Inserts a row into `email_unsubscribes` (idempotent on `user_id + email`).
+- Returns a clean branded HTML confirmation page ("You have been unsubscribed from <Sender>. You won't receive any more emails from us.").
+- Also handles POST for List-Unsubscribe-Post (one-click RFC 8058) which Gmail/Apple Mail use.
 
-### 2. SMTP Presets Expansion (`src/pages/Settings.tsx`)
+### 3. Update `process-queue` edge function
+Before sending each email, two changes:
 
-Add these providers to `SMTP_PRESETS`:
-- **IONOS** — `smtp.ionos.com`, SSL 465, TLS 587
-- **iCloud Mail** — `smtp.mail.me.com`, SSL 0, TLS 587
-- **AOL** — `smtp.aol.com`, SSL 465, TLS 587
-- **Fastmail** — `smtp.fastmail.com`, SSL 465, TLS 587
-- **ProtonMail Bridge** — `127.0.0.1`, SSL 0, TLS 1025
-- **Rackspace** — `secure.emailsrvr.com`, SSL 465, TLS 587
-- **Amazon SES** — `email-smtp.us-east-1.amazonaws.com`, SSL 465, TLS 587
+a) **Suppression check**: skip the row and mark it `failed` with `error_log = 'Recipient unsubscribed'` if `email_unsubscribes` already has a row for `(user_id, to_email)`.
 
-Add corresponding `SelectItem` entries in the dropdown.
+b) **Inject unsubscribe footer + headers**:
+- Append a footer to the HTML body just before `</body>`:
+  ```
+  <hr><p style="font-size:12px;color:#888;text-align:center">
+    Don't want these emails? <a href="<UNSUB_URL>">Unsubscribe</a>
+  </p>
+  ```
+- Replace the existing `List-Unsubscribe` header with the real per-message URL:
+  - `List-Unsubscribe: <https://.../functions/v1/unsubscribe?id=...&token=...>, <mailto:unsubscribe@...>`
+  - `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
 
-### 3. Expandable Instruction Cards (Both Pages)
+### 4. CRM page (`src/pages/CRM.tsx`)
+- Add new stat card "Unsubscribed" (count of unique unsubscribed recipients).
+- Add "Recent Unsubscribes" feed (same pattern as Recent Clicks): subscribes via realtime to `email_unsubscribes`, shows email + timestamp + campaign.
+- Update the lead list to show a red "Unsubscribed" badge for leads at that stage.
+- Add an "Unsubscribed" filter tab.
 
-Use the existing `Accordion` component from `src/components/ui/accordion.tsx`.
+### 5. Campaign Wizard (`src/pages/CampaignWizard.tsx`)
+- In step 2 (Audience), when computing eligible recipients, exclude any contact whose email exists in `email_unsubscribes` for the current user.
+- Show a small notice: "X contacts excluded (unsubscribed)".
 
-**Settings page** — Add an accordion above the SMTP form with items:
-- "How to find your SMTP credentials" — step-by-step for Gmail (App Password), Outlook, Zoho, IONOS, etc.
-- "Which encryption should I use?" — TLS vs SSL explanation
-- "Troubleshooting connection issues" — common fixes
+### 6. Files touched
+- New: `supabase/migrations/<timestamp>_add_unsubscribe.sql`
+- New: `supabase/functions/unsubscribe/index.ts`
+- Edited: `supabase/functions/process-queue/index.ts` (suppression check + footer injection + headers)
+- Edited: `src/pages/CRM.tsx` (stats card, feed, badge, filter)
+- Edited: `src/pages/CampaignWizard.tsx` (exclude unsubscribed in audience step)
+- Deploy: `process-queue`, `unsubscribe`
 
-**Sender Identities page** — Add an accordion at the top:
-- "What is a Sender Identity?" — explains from-name/from-email concept
-- "Do I need DNS verification?" — explains Gmail/Yahoo/Outlook skip vs custom domains
-- "How to add DNS records" — step-by-step guide for popular registrars
-
-### Files Modified
-- `src/pages/SenderIdentities.tsx` — provider dropdown, conditional DNS flow, instruction accordion
-- `src/pages/Settings.tsx` — expanded presets, instruction accordion
-- Database migration — add `email_provider` column to `sender_identities`
-
+### Notes
+- Token uses HMAC-SHA256 so opt-out links cannot be forged or guessed.
+- Opt-out is per user_id (per agency) — one client's unsubscribe doesn't affect another agency's outreach to the same address.
+- Existing `auto_create_crm_lead_from_email` trigger continues to work; the new trigger just overrides stage to `unsubscribed` afterwards.

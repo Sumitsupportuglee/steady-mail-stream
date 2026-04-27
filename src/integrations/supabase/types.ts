@@ -501,6 +501,45 @@ export type Database = {
           },
         ]
       }
+      email_unsubscribes: {
+        Row: {
+          campaign_id: string | null
+          contact_id: string | null
+          email: string
+          email_queue_id: string | null
+          id: string
+          ip_address: string | null
+          reason: string | null
+          unsubscribed_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          email: string
+          email_queue_id?: string | null
+          id?: string
+          ip_address?: string | null
+          reason?: string | null
+          unsubscribed_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          email?: string
+          email_queue_id?: string | null
+          id?: string
+          ip_address?: string | null
+          reason?: string | null
+          unsubscribed_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       integration_token_secrets: {
         Row: {
           token_hash: string
@@ -1032,6 +1071,7 @@ export type Database = {
         | "interested"
         | "meeting_scheduled"
         | "closed"
+        | "unsubscribed"
       domain_status_type: "unverified" | "verified"
       email_status_type: "pending" | "sent" | "failed"
       subscription_plan_type:
@@ -1179,6 +1219,7 @@ export const Constants = {
         "interested",
         "meeting_scheduled",
         "closed",
+        "unsubscribed",
       ],
       domain_status_type: ["unverified", "verified"],
       email_status_type: ["pending", "sent", "failed"],
