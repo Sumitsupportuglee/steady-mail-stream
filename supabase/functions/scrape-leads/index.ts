@@ -64,6 +64,59 @@ function cleanEmail(raw: string): string | null {
   return candidate.toLowerCase();
 }
 
+// Detects junk/auto-generated domains used by CDNs, trackers, asset hashes, etc.
+// Examples: 455a081122cfe.org, reab746b.com, p53405f7e72s.com, a9efba47ad525e.com, heac1c14b8173a.com
+function isJunkDomain(domain: string): boolean {
+  const labels = domain.split('.');
+  // Inspect the registrable label (second-level), e.g. "reab746b" in "reab746b.com"
+  const sld = labels.length >= 2 ? labels[labels.length - 2] : labels[0];
+  if (!sld) return true;
+
+  // Hex-only label of length >= 8 (looks like a hash)
+  if (/^[a-f0-9]{8,}$/i.test(sld)) return true;
+
+  // Long alphanumeric string with no vowels — almost certainly random
+  if (sld.length >= 8 && !/[aeiou]/i.test(sld)) return true;
+
+  // Long string mixing letters and digits with high digit ratio
+  if (sld.length >= 8 && /\d/.test(sld) && /[a-z]/i.test(sld)) {
+    const digits = (sld.match(/\d/g) || []).length;
+    const ratio = digits / sld.length;
+    if (ratio >= 0.25) return true;
+  }
+
+  // Known tracking / asset / CDN domains
+  const blockedDomains = [
+    'sentry.io','wixpress.com','cloudfront.net','akamaized.net','akamaihd.net',
+    'amazonaws.com','googleusercontent.com','gstatic.com','doubleclick.net',
+    'googletagmanager.com','google-analytics.com','facebook.com','fbcdn.net',
+    'cdninstagram.com','twimg.com','jsdelivr.net','unpkg.com','cloudflare.com',
+    'cdn77.org','wp.com','wordpress.com','squarespace-cdn.com','shopify.com',
+    'shopifycdn.com','bootstrapcdn.com','typekit.net','hsforms.com','hs-scripts.com',
+    'mailchimp.com','list-manage.com','sendgrid.net','mailgun.org','postmarkapp.com',
+    'intercom.io','hotjar.com','segment.io','mixpanel.com','optimizely.com',
+    'example.com','example.org','example.net','localhost','test.com','domain.com',
+    'yourdomain.com','email.com','company.com','website.com',
+  ];
+  if (blockedDomains.some(b => domain === b || domain.endsWith('.' + b))) return true;
+
+  return false;
+}
+
+// Reject obvious system/role addresses that aren't useful business contacts.
+function isJunkLocalPart(local: string): boolean {
+  const l = local.toLowerCase();
+  const blocked = [
+    'noreply','no-reply','donotreply','do-not-reply','mailer-daemon','postmaster',
+    'wordpress','wp','admin@wordpress','example','user','username','your-email',
+    'youremail','name','firstname','lastname','test','testing',
+  ];
+  if (blocked.some(b => l === b || l.startsWith(b + '+') || l.startsWith(b + '.'))) return true;
+  // Pure hex/random-looking local parts
+  if (/^[a-f0-9]{16,}$/i.test(l)) return true;
+  return false;
+}
+
 function extractEmails(text: string): string[] {
   // Loose grab — we'll clean each match.
   const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,30}[a-zA-Z]*/g;
@@ -73,14 +126,15 @@ function extractEmails(text: string): string[] {
     const c = cleanEmail(m);
     if (!c) continue;
     if (c.endsWith('.png') || c.endsWith('.jpg') || c.endsWith('.gif') || c.endsWith('.svg') || c.endsWith('.webp')) continue;
-    if (c.includes('example.com') || c.includes('sentry.io') || c.includes('wixpress.com')) continue;
-    if (c.startsWith('noreply') || c.startsWith('no-reply') || c.startsWith('donotreply')) continue;
+    const [local, domain] = c.split('@');
+    if (isJunkLocalPart(local)) continue;
+    if (isJunkDomain(domain)) continue;
     cleaned.push(c);
   }
   return [...new Set(cleaned)];
 }
 
-// Final pass: ask Lovable AI to fix any emails that still look mangled.
+// Final pass: ask Lovable AI to clean and validate each email.
 async function aiValidateEmails(emails: string[]): Promise<string[]> {
   if (emails.length === 0) return emails;
   const apiKey = Deno.env.get('LOVABLE_API_KEY');
@@ -95,14 +149,23 @@ async function aiValidateEmails(emails: string[]): Promise<string[]> {
         messages: [
           {
             role: 'system',
-            content: 'You clean scraped email addresses. For each input email, return a valid cleaned email address by removing extra characters glued to it (e.g. "info@site.comTel" -> "info@site.com", "Emailsales@x.co" -> "sales@x.co"). If the email is already valid, return it unchanged. If it cannot be salvaged into a valid email, return null. Respond ONLY with a JSON object {"emails": [...]} where each item is the cleaned email or null, in the same order as the input.',
+            content: `You validate scraped business email addresses. For each input email decide if it is a REAL, usable business contact email.
+
+Rules:
+1. If extra characters are glued to a valid email, clean them (e.g. "info@site.comTel" -> "info@site.com", "Emailsales@x.co" -> "sales@x.co").
+2. REJECT (return null) emails whose domain is clearly auto-generated/random/CDN/tracker, e.g. "adopt@455a081122cfe.org", "team@reab746b.com", "evan@p53405f7e72s.com", "info@a9efba47ad525e.com", "ps@heac1c14b8173a.com". These have hash/random-looking second-level domains and are not real contact addresses.
+3. REJECT placeholder/example/role-only addresses: example.com, yourdomain.com, noreply@*, postmaster@*, etc.
+4. Keep legitimate business emails even if generic role addresses (info@, sales@, contact@, hello@).
+5. If unsure whether a domain is real, REJECT it (return null) — precision matters more than recall.
+
+Respond ONLY with a JSON object {"emails": [...]} where each item is the cleaned email string or null, in the same order as the input.`,
           },
           { role: 'user', content: JSON.stringify({ emails }) },
         ],
         response_format: { type: 'json_object' },
       }),
     });
-    if (!res.ok) return emails;
+    if (!res.ok) return emails.filter(e => STRICT_EMAIL_RE.test(e));
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content;
     if (!content) return emails;
@@ -111,7 +174,11 @@ async function aiValidateEmails(emails: string[]): Promise<string[]> {
     const out: string[] = [];
     for (const e of parsed.emails) {
       if (typeof e !== 'string') continue;
-      if (STRICT_EMAIL_RE.test(e) && e.length < 100) out.push(e.toLowerCase());
+      const lower = e.toLowerCase();
+      if (!STRICT_EMAIL_RE.test(lower) || lower.length >= 100) continue;
+      const [local, domain] = lower.split('@');
+      if (isJunkLocalPart(local) || isJunkDomain(domain)) continue;
+      out.push(lower);
     }
     return [...new Set(out)];
   } catch (err) {
