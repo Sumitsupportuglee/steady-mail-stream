@@ -126,7 +126,8 @@ class SmtpClient {
     to: string,
     subject: string,
     htmlBody: string,
-    fromName?: string
+    fromName?: string,
+    unsubscribeUrl?: string
   ): Promise<string> {
     const cleanFrom = from.match(/<(.+)>/)?.[1] || from
     const domain = cleanFrom.split('@')[1]
@@ -147,6 +148,10 @@ class SmtpClient {
     const date = new Date().toUTCString()
     const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
 
+    const listUnsub = unsubscribeUrl
+      ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
+      : `<mailto:unsubscribe@${domain}>`
+
     const headers = [
       `From: ${senderDisplay}`,
       `To: ${to}`,
@@ -156,7 +161,8 @@ class SmtpClient {
       `MIME-Version: 1.0`,
       `Content-Type: text/html; charset=UTF-8`,
       `Content-Transfer-Encoding: quoted-printable`,
-      `List-Unsubscribe: <mailto:unsubscribe@${domain}>`,
+      `List-Unsubscribe: ${listUnsub}`,
+      ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
       `X-Mailer: SteadyMail/1.0`,
     ]
 
