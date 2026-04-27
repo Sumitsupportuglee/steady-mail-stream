@@ -1,68 +1,63 @@
-## Goal
+# Add SPF & DMARC Authentication (Optional, Recommended)
 
-Every campaign email gets a working unsubscribe link. When a recipient clicks it, they are recorded as opted-out, blocked from any future sends, and shown clearly in the CRM as "Unsubscribed" — so no further outreach is made by mistake.
+## Why this matters
 
-## What the user will see
+Mailbox providers (Gmail, Outlook, Yahoo) use three records to authenticate a sender:
 
-- Each outgoing email has an "Unsubscribe" footer link.
-- Clicking it opens a confirmation page that records the opt-out (no login needed).
-- In the CRM, those contacts get a red "Unsubscribed" badge and move to a new "Unsubscribed" stage. They are filterable, and excluded from any new campaign by default.
-- A new "Unsubscribed" stat card on the CRM and a "Recent Unsubscribes" feed (mirroring "Recent Clicks").
-- When building a new campaign in the wizard, unsubscribed contacts are automatically skipped from the recipient count, with a notice "X contacts skipped (unsubscribed)".
+- **DKIM** (already implemented) — cryptographically signs the email
+- **SPF** — declares which servers are allowed to send for your domain
+- **DMARC** — tells receivers what to do if SPF/DKIM fail
 
-## Implementation
+Adding all three typically lifts inbox placement by 20–40% and is **required** by Gmail/Yahoo's 2024 bulk-sender rules. Missing SPF/DMARC is the #1 reason cold-outreach emails land in spam.
 
-### 1. Database (migration)
-- Add `unsubscribed` value to the existing `crm_stage_type` enum.
-- Create a new `email_unsubscribes` table:
-  - `id`, `user_id`, `contact_id` (nullable), `campaign_id` (nullable), `email_queue_id` (nullable), `email` (text, indexed), `reason` (text, optional), `ip_address`, `user_agent`, `unsubscribed_at`.
-  - RLS: users can SELECT their own rows; service role can INSERT.
-- Add trigger `auto_unsubscribe_on_optout`: on insert into `email_unsubscribes`, set the matching `contacts.status` to `'unsubscribed'` and the matching `crm_leads.stage` to `'unsubscribed'` (scoped to that user_id + email).
-- Enable realtime on `email_unsubscribes` so the CRM updates live.
+## What changes (custom-domain identities only)
 
-### 2. New edge function: `unsubscribe`
-- Public (no JWT). GET `/unsubscribe?id=<email_queue_id>&token=<hmac>`.
-- Validates token (HMAC of `email_queue_id` using `SUPABASE_SERVICE_ROLE_KEY` as secret) to prevent spoofed opt-outs.
-- Looks up the `email_queue` row → resolves `user_id`, `to_email`, `campaign_id`, `contact_id`.
-- Inserts a row into `email_unsubscribes` (idempotent on `user_id + email`).
-- Returns a clean branded HTML confirmation page ("You have been unsubscribed from <Sender>. You won't receive any more emails from us.").
-- Also handles POST for List-Unsubscribe-Post (one-click RFC 8058) which Gmail/Apple Mail use.
+Free providers (Gmail / Yahoo / Outlook) keep working exactly as today — no DNS UI, auto-verified.
 
-### 3. Update `process-queue` edge function
-Before sending each email, two changes:
+For **"Other (Custom Domain)"** identities, the DNS Configuration panel will show **three sections** instead of one:
 
-a) **Suppression check**: skip the row and mark it `failed` with `error_log = 'Recipient unsubscribed'` if `email_unsubscribes` already has a row for `(user_id, to_email)`.
+1. **DKIM (CNAME)** — required, already exists
+2. **SPF (TXT)** — recommended, optional
+3. **DMARC (TXT)** — recommended, optional
 
-b) **Inject unsubscribe footer + headers**:
-- Append a footer to the HTML body just before `</body>`:
-  ```
-  <hr><p style="font-size:12px;color:#888;text-align:center">
-    Don't want these emails? <a href="<UNSUB_URL>">Unsubscribe</a>
-  </p>
-  ```
-- Replace the existing `List-Unsubscribe` header with the real per-message URL:
-  - `List-Unsubscribe: <https://.../functions/v1/unsubscribe?id=...&token=...>, <mailto:unsubscribe@...>`
-  - `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+Each section gets its own status badge (Verified / Not Set), copy buttons, and individual "Verify" button. The user can skip SPF/DMARC and still send — only DKIM is required to enable sending. A friendly banner explains the deliverability benefit.
 
-### 4. CRM page (`src/pages/CRM.tsx`)
-- Add new stat card "Unsubscribed" (count of unique unsubscribed recipients).
-- Add "Recent Unsubscribes" feed (same pattern as Recent Clicks): subscribes via realtime to `email_unsubscribes`, shows email + timestamp + campaign.
-- Update the lead list to show a red "Unsubscribed" badge for leads at that stage.
-- Add an "Unsubscribed" filter tab.
+### Records that will be shown
 
-### 5. Campaign Wizard (`src/pages/CampaignWizard.tsx`)
-- In step 2 (Audience), when computing eligible recipients, exclude any contact whose email exists in `email_unsubscribes` for the current user.
-- Show a small notice: "X contacts excluded (unsubscribed)".
+```text
+SPF   Host: @          Value: v=spf1 include:amazonses.com ~all
+DMARC Host: _dmarc     Value: v=DMARC1; p=none; rua=mailto:dmarc@<domain>; pct=100; aspf=r; adkim=r
+```
 
-### 6. Files touched
-- New: `supabase/migrations/<timestamp>_add_unsubscribe.sql`
-- New: `supabase/functions/unsubscribe/index.ts`
-- Edited: `supabase/functions/process-queue/index.ts` (suppression check + footer injection + headers)
-- Edited: `src/pages/CRM.tsx` (stats card, feed, badge, filter)
-- Edited: `src/pages/CampaignWizard.tsx` (exclude unsubscribed in audience step)
-- Deploy: `process-queue`, `unsubscribe`
+DMARC starts at `p=none` (monitor-only) — the safe default that won't break legitimate mail. We'll mention in the UI that they can tighten to `quarantine` or `reject` later once they're confident.
 
-### Notes
-- Token uses HMAC-SHA256 so opt-out links cannot be forged or guessed.
-- Opt-out is per user_id (per agency) — one client's unsubscribe doesn't affect another agency's outreach to the same address.
-- Existing `auto_create_crm_lead_from_email` trigger continues to work; the new trigger just overrides stage to `unsubscribed` afterwards.
+## Technical changes
+
+**Database migration** — add to `sender_identities`:
+- `spf_status text default 'not_set'` ('not_set' | 'verified' | 'failed')
+- `dmarc_status text default 'not_set'`
+- `spf_verified_at timestamptz`
+- `dmarc_verified_at timestamptz`
+
+**Edge function `verify-domain`** — extend to accept `record_type: 'dkim' | 'spf' | 'dmarc'`:
+- DKIM: existing CNAME check (unchanged)
+- SPF: DoH TXT query on root domain, look for `v=spf1` containing `amazonses.com` (or `include:` directive)
+- DMARC: DoH TXT query on `_dmarc.<domain>`, look for `v=DMARC1`
+- Update the matching `*_status` column
+
+**Frontend `src/pages/SenderIdentities.tsx`**:
+- Replace the single CNAME card with a 3-record layout (DKIM / SPF / DMARC), each with Host + Value + Copy + Verify button + status badge
+- Add an "Optional but recommended" banner explaining the deliverability lift
+- Update the help accordion with a new "Why SPF & DMARC?" section
+- Update `SenderIdentity` interface and `fetchIdentities` to read new columns
+
+**No changes** to:
+- `process-queue` (sending logic) — DKIM remains the only hard requirement
+- Free-provider flow (Gmail/Yahoo/Outlook)
+- Existing identities — they continue working; SPF/DMARC just show as "Not Set" until the user opts in
+
+## Files touched
+
+- `supabase/migrations/<new>_add_spf_dmarc_columns.sql` (new)
+- `supabase/functions/verify-domain/index.ts` (extend with SPF + DMARC checks)
+- `src/pages/SenderIdentities.tsx` (UI for 3 records)

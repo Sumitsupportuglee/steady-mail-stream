@@ -5,6 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+type RecordType = 'dkim' | 'spf' | 'dmarc'
+
+async function dnsLookup(name: string, type: 'CNAME' | 'TXT'): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`,
+      { headers: { 'Accept': 'application/dns-json' } }
+    )
+    const json = await res.json()
+    if (!json.Answer) return []
+    return json.Answer
+      .map((a: any) => String(a.data || ''))
+      .map((s: string) => s.replace(/^"|"$/g, '').replace(/"\s+"/g, ''))
+  } catch (e) {
+    console.error('DNS lookup error', name, type, e)
+    return []
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -14,29 +33,20 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Get the authorization header to identify the user
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('Missing authorization header')
-    }
+    if (!authHeader) throw new Error('Missing authorization header')
 
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey)
-    
-    // Verify the user's JWT
     const token = authHeader.replace('Bearer ', '')
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
-    
-    if (userError || !user) {
-      throw new Error('Unauthorized')
-    }
+    if (userError || !user) throw new Error('Unauthorized')
 
-    const { identity_id } = await req.json()
+    const body = await req.json()
+    const { identity_id } = body
+    const recordType: RecordType = (body.record_type as RecordType) || 'dkim'
 
-    if (!identity_id) {
-      throw new Error('Missing identity_id')
-    }
+    if (!identity_id) throw new Error('Missing identity_id')
 
-    // Get the sender identity
     const { data: identity, error: fetchError } = await supabaseClient
       .from('sender_identities')
       .select('*')
@@ -44,76 +54,70 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .single()
 
-    if (fetchError || !identity) {
-      throw new Error('Sender identity not found')
-    }
+    if (fetchError || !identity) throw new Error('Sender identity not found')
 
     const domain = identity.from_email.split('@')[1]
-    const dkimHost = identity.dkim_record?.split('.')[0]
-
-    // Perform DNS lookup to verify CNAME record
-    // Note: In production, you'd use a proper DNS lookup service
-    // For now, we'll simulate the verification by checking if the record exists
     let isVerified = false
-    
-    try {
-      // Try to resolve the CNAME record using DNS over HTTPS (Google's public DNS)
+    let message = ''
+
+    if (recordType === 'dkim') {
+      const dkimHost = identity.dkim_record?.split('.')[0]
+      if (!dkimHost) throw new Error('No DKIM record configured')
       const dnsQuery = `${dkimHost}._domainkey.${domain}`
-      const response = await fetch(
-        `https://dns.google/resolve?name=${encodeURIComponent(dnsQuery)}&type=CNAME`,
-        { headers: { 'Accept': 'application/dns-json' } }
-      )
-      
-      const dnsResult = await response.json()
-      
-      // Check if we got a valid response with CNAME records
-      if (dnsResult.Answer && dnsResult.Answer.length > 0) {
-        isVerified = true
-        console.log(`DNS verification successful for ${dnsQuery}:`, dnsResult.Answer)
-      } else if (dnsResult.Status === 0) {
-        // Status 0 means NOERROR - the query was successful
-        // Even without Answer, check if there's any record
-        console.log(`DNS query returned NOERROR for ${dnsQuery}, but no CNAME found`)
-      }
-    } catch (dnsError) {
-      console.error('DNS lookup error:', dnsError)
-      // Don't throw - just means verification failed
-    }
+      const records = await dnsLookup(dnsQuery, 'CNAME')
+      isVerified = records.length > 0
+      message = isVerified
+        ? 'DKIM verified successfully!'
+        : 'DKIM CNAME record not found. DNS propagation can take up to 48 hours.'
 
-    // Update the sender identity status
-    const newStatus = isVerified ? 'verified' : 'unverified'
-    
-    const { error: updateError } = await supabaseClient
-      .from('sender_identities')
-      .update({ domain_status: newStatus })
-      .eq('id', identity_id)
+      await supabaseClient
+        .from('sender_identities')
+        .update({ domain_status: isVerified ? 'verified' : 'unverified' })
+        .eq('id', identity_id)
+    } else if (recordType === 'spf') {
+      const records = await dnsLookup(domain, 'TXT')
+      const spfRecord = records.find(r => r.toLowerCase().startsWith('v=spf1'))
+      // Accept any valid SPF record (may include amazonses, sendgrid, _spf.google.com etc.)
+      isVerified = !!spfRecord
+      message = isVerified
+        ? `SPF verified: ${spfRecord}`
+        : 'SPF TXT record not found at root domain. Add it and try again.'
 
-    if (updateError) {
-      throw updateError
+      await supabaseClient
+        .from('sender_identities')
+        .update({
+          spf_status: isVerified ? 'verified' : 'failed',
+          spf_verified_at: isVerified ? new Date().toISOString() : null,
+        })
+        .eq('id', identity_id)
+    } else if (recordType === 'dmarc') {
+      const records = await dnsLookup(`_dmarc.${domain}`, 'TXT')
+      const dmarcRecord = records.find(r => r.toLowerCase().startsWith('v=dmarc1'))
+      isVerified = !!dmarcRecord
+      message = isVerified
+        ? `DMARC verified: ${dmarcRecord}`
+        : 'DMARC TXT record not found at _dmarc subdomain. Add it and try again.'
+
+      await supabaseClient
+        .from('sender_identities')
+        .update({
+          dmarc_status: isVerified ? 'verified' : 'failed',
+          dmarc_verified_at: isVerified ? new Date().toISOString() : null,
+        })
+        .eq('id', identity_id)
+    } else {
+      throw new Error('Invalid record_type. Use dkim, spf, or dmarc.')
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        verified: isVerified,
-        domain,
-        message: isVerified 
-          ? 'Domain verified successfully! You can now send emails from this address.'
-          : 'DNS records not found yet. Please ensure CNAME records are configured correctly and try again. DNS propagation can take up to 48 hours.'
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ success: true, verified: isVerified, record_type: recordType, domain, message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error: any) {
     console.error('Verification error:', error)
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })
