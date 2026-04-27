@@ -521,75 +521,166 @@ export default function SenderIdentities() {
                         </Alert>
                       )}
 
-                      <div className="rounded-lg bg-muted p-4">
-                        <h4 className="font-medium mb-2">CNAME Record</h4>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Add this CNAME record to your DNS provider (GoDaddy, Namecheap, Cloudflare, etc.)
-                        </p>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between p-3 bg-background rounded border">
-                            <div>
-                              <div className="text-xs text-muted-foreground">Host</div>
-                              <div className="font-mono text-sm">{selectedIdentity.dkim_record?.split('.')[0]}._domainkey</div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}._domainkey`)}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="flex items-center justify-between p-3 bg-background rounded border">
-                            <div>
-                              <div className="text-xs text-muted-foreground">Value</div>
-                              <div className="font-mono text-sm break-all">
-                                {selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => copyToClipboard(`${selectedIdentity.dkim_record?.split('.')[0]}.dkim.amazonses.com`)}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      {(() => {
+                        const domain = selectedIdentity.from_email.split('@')[1] || '';
+                        const dkimHost = selectedIdentity.dkim_record?.split('.')[0] || '';
+                        const dkimRecordHost = `${dkimHost}._domainkey`;
+                        const dkimRecordValue = `${dkimHost}.dkim.amazonses.com`;
+                        const spfValue = `v=spf1 include:amazonses.com ~all`;
+                        const dmarcValue = `v=DMARC1; p=none; rua=mailto:dmarc@${domain}; pct=100; aspf=r; adkim=r`;
+                        const spfStatus: RecordStatus = selectedIdentity.spf_status || 'not_set';
+                        const dmarcStatus: RecordStatus = selectedIdentity.dmarc_status || 'not_set';
 
-                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                        <h4 className="font-medium mb-2 flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4" />
-                          Verify Your Domain
-                        </h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          After adding the CNAME record to your DNS, click the button below to verify your domain.
-                          DNS propagation can take up to 48 hours.
-                        </p>
-                        <Button
-                          onClick={() => handleVerifyDomain(selectedIdentity)}
-                          disabled={isVerifying || selectedIdentity.domain_status === 'verified'}
-                          className="w-full"
-                        >
-                          {isVerifying ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Verifying...
-                            </>
-                          ) : selectedIdentity.domain_status === 'verified' ? (
-                            <>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Domain Verified
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                              Verify Domain Now
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                        const StatusBadge = ({ status, required }: { status: 'verified' | 'unverified' | RecordStatus; required?: boolean }) => {
+                          if (status === 'verified') {
+                            return (
+                              <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
+                                <CheckCircle className="mr-1 h-3 w-3" /> Verified
+                              </Badge>
+                            );
+                          }
+                          if (status === 'failed') {
+                            return (
+                              <Badge variant="destructive">
+                                <XCircle className="mr-1 h-3 w-3" /> Not Found
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge variant="secondary">
+                              {required ? 'Required' : 'Optional'}
+                            </Badge>
+                          );
+                        };
+
+                        const RecordRow = ({ label, value }: { label: string; value: string }) => (
+                          <div className="flex items-center justify-between p-3 bg-background rounded border">
+                            <div className="min-w-0 flex-1 mr-2">
+                              <div className="text-xs text-muted-foreground">{label}</div>
+                              <div className="font-mono text-sm break-all">{value}</div>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(value)}>
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+
+                        return (
+                          <>
+                            <Alert className="border-primary/30 bg-primary/5">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              <AlertTitle>Boost Inbox Delivery with SPF & DMARC</AlertTitle>
+                              <AlertDescription className="text-sm">
+                                Adding SPF and DMARC alongside DKIM is <strong>strongly recommended</strong> — Gmail and Yahoo now require all three for bulk senders. They're optional here, but emails without them are far more likely to land in spam.
+                              </AlertDescription>
+                            </Alert>
+
+                            {/* DKIM */}
+                            <div className="rounded-lg bg-muted p-4 space-y-3">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <ShieldCheck className="h-4 w-4 text-primary" />
+                                  1. DKIM (CNAME) <span className="text-xs text-muted-foreground font-normal">— required</span>
+                                </h4>
+                                <StatusBadge status={selectedIdentity.domain_status} required />
+                              </div>
+                              <p className="text-sm text-muted-foreground">Cryptographically signs your emails so receivers can verify they're authentic.</p>
+                              <RecordRow label="Type" value="CNAME" />
+                              <RecordRow label="Host / Name" value={dkimRecordHost} />
+                              <RecordRow label="Value / Points to" value={dkimRecordValue} />
+                              <Button
+                                onClick={() => handleVerifyDomain(selectedIdentity, 'dkim')}
+                                disabled={isVerifying !== null || selectedIdentity.domain_status === 'verified'}
+                                className="w-full"
+                                size="sm"
+                              >
+                                {isVerifying === 'dkim' ? (
+                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                ) : selectedIdentity.domain_status === 'verified' ? (
+                                  <><CheckCircle className="mr-2 h-4 w-4" /> DKIM Verified</>
+                                ) : (
+                                  <><RefreshCw className="mr-2 h-4 w-4" /> Verify DKIM</>
+                                )}
+                              </Button>
+                            </div>
+
+                            {/* SPF */}
+                            <div className="rounded-lg bg-muted p-4 space-y-3">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Shield className="h-4 w-4 text-primary" />
+                                  2. SPF (TXT) <span className="text-xs text-muted-foreground font-normal">— recommended</span>
+                                </h4>
+                                <StatusBadge status={spfStatus} />
+                              </div>
+                              <p className="text-sm text-muted-foreground">Tells receivers which servers are authorised to send email for your domain.</p>
+                              <RecordRow label="Type" value="TXT" />
+                              <RecordRow label="Host / Name" value="@" />
+                              <RecordRow label="Value" value={spfValue} />
+                              <p className="text-xs text-muted-foreground">
+                                Already have an SPF record? Don't add a second one — instead, merge <code className="bg-background px-1 rounded">include:amazonses.com</code> into your existing record.
+                              </p>
+                              <Button
+                                onClick={() => handleVerifyDomain(selectedIdentity, 'spf')}
+                                disabled={isVerifying !== null}
+                                className="w-full"
+                                variant={spfStatus === 'verified' ? 'outline' : 'default'}
+                                size="sm"
+                              >
+                                {isVerifying === 'spf' ? (
+                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                ) : spfStatus === 'verified' ? (
+                                  <><CheckCircle className="mr-2 h-4 w-4" /> SPF Verified — Re-check</>
+                                ) : (
+                                  <><RefreshCw className="mr-2 h-4 w-4" /> Verify SPF</>
+                                )}
+                              </Button>
+                            </div>
+
+                            {/* DMARC */}
+                            <div className="rounded-lg bg-muted p-4 space-y-3">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <Shield className="h-4 w-4 text-primary" />
+                                  3. DMARC (TXT) <span className="text-xs text-muted-foreground font-normal">— recommended</span>
+                                </h4>
+                                <StatusBadge status={dmarcStatus} />
+                              </div>
+                              <p className="text-sm text-muted-foreground">Defines what to do when SPF or DKIM fails — and gives you reports on impersonation attempts.</p>
+                              <RecordRow label="Type" value="TXT" />
+                              <RecordRow label="Host / Name" value="_dmarc" />
+                              <RecordRow label="Value" value={dmarcValue} />
+                              <p className="text-xs text-muted-foreground">
+                                Starts in safe <strong>monitor mode</strong> (<code className="bg-background px-1 rounded">p=none</code>). You can later switch to <code>quarantine</code> or <code>reject</code> for stronger protection.
+                              </p>
+                              <Button
+                                onClick={() => handleVerifyDomain(selectedIdentity, 'dmarc')}
+                                disabled={isVerifying !== null}
+                                className="w-full"
+                                variant={dmarcStatus === 'verified' ? 'outline' : 'default'}
+                                size="sm"
+                              >
+                                {isVerifying === 'dmarc' ? (
+                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                ) : dmarcStatus === 'verified' ? (
+                                  <><CheckCircle className="mr-2 h-4 w-4" /> DMARC Verified — Re-check</>
+                                ) : (
+                                  <><RefreshCw className="mr-2 h-4 w-4" /> Verify DMARC</>
+                                )}
+                              </Button>
+                            </div>
+
+                            <div className="text-sm text-muted-foreground space-y-2">
+                              <p><strong>Tips:</strong></p>
+                              <ul className="list-disc list-inside space-y-1 ml-2">
+                                <li>DNS changes can take 5 minutes to 48 hours to propagate</li>
+                                <li>Only DKIM is required to start sending — SPF & DMARC can be added later</li>
+                                <li>Skip SPF if you already have one; merge values instead of adding a second record</li>
+                              </ul>
+                            </div>
+                          </>
+                        );
+                      })()}
 
                       <div className="text-sm text-muted-foreground space-y-2">
                         <p><strong>Important:</strong></p>
