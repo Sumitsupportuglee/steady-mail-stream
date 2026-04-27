@@ -12,23 +12,112 @@ interface ScrapedLead {
   address: string | null;
 }
 
+// Common TLDs we recognize. Anything after these is junk glued to the email.
+const KNOWN_TLDS = [
+  'com','net','org','io','co','ai','app','dev','info','biz','me','us','uk','in','ca',
+  'au','de','fr','es','it','nl','eu','jp','cn','br','mx','ru','tv','xyz','online',
+  'site','tech','store','shop','agency','digital','studio','media','news','live',
+  'edu','gov','mil','int','asia','cloud','space','world','today','solutions','tools',
+];
+
+const STRICT_EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,24}$/;
+
+function cleanEmail(raw: string): string | null {
+  let e = raw.trim().replace(/^[<("'\[]+|[>)"'\]\.,;:]+$/g, '');
+
+  // Strip a leading non-email char run before the local part (e.g. "xinfo@" stays as "xinfo@",
+  // but "Email:info@" -> "info@"). We only strip if there's a clear delimiter like : or whitespace.
+  const colonIdx = e.lastIndexOf(':', e.indexOf('@'));
+  if (colonIdx > -1 && colonIdx < e.indexOf('@')) {
+    e = e.slice(colonIdx + 1);
+  }
+
+  // Truncate after the longest valid TLD match: scan TLDs and cut at first known TLD boundary.
+  const atIdx = e.indexOf('@');
+  if (atIdx === -1) return null;
+  const local = e.slice(0, atIdx);
+  let domain = e.slice(atIdx + 1).toLowerCase();
+
+  // Remove anything after the TLD that looks like glued text (letters following the TLD).
+  // Try matching domain.tld and cutting there.
+  const domainMatch = domain.match(/^([a-z0-9.\-]+?\.([a-z]{2,24}))(?=[^a-z0-9\-]|$)/i);
+  let cleanedDomain = domainMatch ? domainMatch[1] : domain;
+
+  // If the matched TLD is unusually long or unknown, try to find a known TLD inside it.
+  const tldMatch = cleanedDomain.match(/\.([a-z]{2,24})$/i);
+  if (tldMatch) {
+    const tld = tldMatch[1].toLowerCase();
+    if (!KNOWN_TLDS.includes(tld)) {
+      // Try to find a known TLD prefix inside this segment (e.g. "comTel" -> "com")
+      for (const known of KNOWN_TLDS) {
+        if (tld.startsWith(known)) {
+          cleanedDomain = cleanedDomain.slice(0, cleanedDomain.length - tld.length) + known;
+          break;
+        }
+      }
+    }
+  }
+
+  const candidate = `${local}@${cleanedDomain}`;
+  if (!STRICT_EMAIL_RE.test(candidate)) return null;
+  if (candidate.length > 100) return null;
+  return candidate.toLowerCase();
+}
+
 function extractEmails(text: string): string[] {
-  const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+  // Loose grab — we'll clean each match.
+  const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,30}[a-zA-Z]*/g;
   const matches = text.match(emailRegex) || [];
-  const filtered = matches.filter(email => {
-    const lower = email.toLowerCase();
-    return !lower.endsWith('.png') &&
-      !lower.endsWith('.jpg') &&
-      !lower.endsWith('.gif') &&
-      !lower.endsWith('.svg') &&
-      !lower.endsWith('.webp') &&
-      !lower.includes('example.com') &&
-      !lower.includes('sentry.io') &&
-      !lower.includes('wixpress.com') &&
-      !lower.startsWith('noreply') &&
-      email.length < 100;
-  });
-  return [...new Set(filtered)];
+  const cleaned: string[] = [];
+  for (const m of matches) {
+    const c = cleanEmail(m);
+    if (!c) continue;
+    if (c.endsWith('.png') || c.endsWith('.jpg') || c.endsWith('.gif') || c.endsWith('.svg') || c.endsWith('.webp')) continue;
+    if (c.includes('example.com') || c.includes('sentry.io') || c.includes('wixpress.com')) continue;
+    if (c.startsWith('noreply') || c.startsWith('no-reply') || c.startsWith('donotreply')) continue;
+    cleaned.push(c);
+  }
+  return [...new Set(cleaned)];
+}
+
+// Final pass: ask Lovable AI to fix any emails that still look mangled.
+async function aiValidateEmails(emails: string[]): Promise<string[]> {
+  if (emails.length === 0) return emails;
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
+  if (!apiKey) return emails;
+
+  try {
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: 'You clean scraped email addresses. For each input email, return a valid cleaned email address by removing extra characters glued to it (e.g. "info@site.comTel" -> "info@site.com", "Emailsales@x.co" -> "sales@x.co"). If the email is already valid, return it unchanged. If it cannot be salvaged into a valid email, return null. Respond ONLY with a JSON object {"emails": [...]} where each item is the cleaned email or null, in the same order as the input.',
+          },
+          { role: 'user', content: JSON.stringify({ emails }) },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (!res.ok) return emails;
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) return emails;
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed.emails)) return emails;
+    const out: string[] = [];
+    for (const e of parsed.emails) {
+      if (typeof e !== 'string') continue;
+      if (STRICT_EMAIL_RE.test(e) && e.length < 100) out.push(e.toLowerCase());
+    }
+    return [...new Set(out)];
+  } catch (err) {
+    console.log('AI email validation failed, falling back to regex output:', err);
+    return emails;
+  }
 }
 
 function extractPhones(text: string): string[] {
@@ -233,10 +322,23 @@ Deno.serve(async (req) => {
 
     // Trim to requested limit
     const trimmedLeads = leads.slice(0, limit);
-    console.log(`Returning ${trimmedLeads.length} leads (requested: ${limit})`);
+
+    // AI-powered email validation pass — fix any mangled addresses
+    console.log(`Running AI email validation on ${trimmedLeads.length} leads`);
+    await Promise.all(
+      trimmedLeads.map(async (lead) => {
+        if (lead.emails.length > 0) {
+          lead.emails = await aiValidateEmails(lead.emails);
+        }
+      })
+    );
+
+    // Drop leads that have no valid emails AND no phones after cleanup
+    const finalLeads = trimmedLeads.filter(l => l.emails.length > 0 || l.phones.length > 0);
+    console.log(`Returning ${finalLeads.length} leads (requested: ${limit})`);
 
     return new Response(
-      JSON.stringify({ success: true, leads: trimmedLeads }),
+      JSON.stringify({ success: true, leads: finalLeads }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
