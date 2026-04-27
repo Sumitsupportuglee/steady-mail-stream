@@ -182,6 +182,7 @@ export default function CRM() {
       supabase.channel('crm-queue').on('postgres_changes', { event: '*', schema: 'public', table: 'email_queue' }, () => fetchStats()).subscribe(),
       supabase.channel('crm-opens').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_opens' }, () => fetchStats()).subscribe(),
       supabase.channel('crm-clicks').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_clicks' }, () => fetchStats()).subscribe(),
+      supabase.channel('crm-unsubs').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_unsubscribes' }, () => fetchStats()).subscribe(),
     ];
 
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
