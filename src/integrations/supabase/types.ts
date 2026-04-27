@@ -806,6 +806,8 @@ export type Database = {
           client_id: string | null
           created_at: string | null
           dkim_record: string | null
+          dmarc_status: string
+          dmarc_verified_at: string | null
           domain_status:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
@@ -813,6 +815,8 @@ export type Database = {
           from_email: string
           from_name: string
           id: string
+          spf_status: string
+          spf_verified_at: string | null
           updated_at: string | null
           user_id: string
         }
@@ -820,6 +824,8 @@ export type Database = {
           client_id?: string | null
           created_at?: string | null
           dkim_record?: string | null
+          dmarc_status?: string
+          dmarc_verified_at?: string | null
           domain_status?:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
@@ -827,6 +833,8 @@ export type Database = {
           from_email: string
           from_name: string
           id?: string
+          spf_status?: string
+          spf_verified_at?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -834,6 +842,8 @@ export type Database = {
           client_id?: string | null
           created_at?: string | null
           dkim_record?: string | null
+          dmarc_status?: string
+          dmarc_verified_at?: string | null
           domain_status?:
             | Database["public"]["Enums"]["domain_status_type"]
             | null
@@ -841,6 +851,8 @@ export type Database = {
           from_email?: string
           from_name?: string
           id?: string
+          spf_status?: string
+          spf_verified_at?: string | null
           updated_at?: string | null
           user_id?: string
         }
