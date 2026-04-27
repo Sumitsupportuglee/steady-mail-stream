@@ -372,12 +372,20 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // BATCH FETCH: pull a larger window per cron tick. We chunk per SMTP
+    // session below to respect provider per-session limits.
+    const BATCH_SIZE = 200
+    const MAX_ATTEMPTS = 3
+    const PER_SESSION_LIMIT = 20      // reconnect every N sends to avoid "mails per session" caps
+    const INTER_SEND_DELAY_MS = 250   // small delay smooths bursts -> fewer 451 rate-limits
+
     const { data: pendingEmails, error: fetchError } = await supabase
       .from('email_queue')
       .select('*')
       .eq('status', 'pending')
+      .lt('attempt_count', MAX_ATTEMPTS)
       .order('created_at', { ascending: true })
-      .limit(50)
+      .limit(BATCH_SIZE)
 
     if (fetchError) throw new Error(`DB Error: ${fetchError.message}`)
 
