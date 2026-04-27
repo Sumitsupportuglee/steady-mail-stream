@@ -434,96 +434,137 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const client = new SmtpClient()
-      let connected = false
+      // Cache from_name lookups per campaign for this batch
+      const fromNameCache = new Map<string, string | undefined>()
 
-      try {
-        await client.connect(smtpConfig)
-        connected = true
-      } catch (connErr: unknown) {
-        const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
-        console.error(`SMTP connect failed: ${errMsg}`)
-        for (const email of emails) {
-          if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
-          await supabase
-            .from('email_queue')
-            .update({
-              status: 'failed',
-              attempt_count: (email.attempt_count || 0) + 1,
-              error_log: `SMTP connection error: ${errMsg}`,
-            })
-            .eq('id', email.id)
-          errorCount++
+      // Chunk emails into per-session sub-batches: a fresh SMTP connection
+      // is opened for each chunk so providers don't trip "mails per session"
+      // limits (451-Mails per session limit exceeded).
+      for (let i = 0; i < emails.length; i += PER_SESSION_LIMIT) {
+        const chunk = emails.slice(i, i + PER_SESSION_LIMIT)
+        const client = new SmtpClient()
+        let connected = false
+
+        try {
+          await client.connect(smtpConfig)
+          connected = true
+        } catch (connErr: unknown) {
+          const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
+          console.error(`SMTP connect failed: ${errMsg}`)
+          // Connection issues are usually transient -> keep emails pending so
+          // the next cron tick retries them, until MAX_ATTEMPTS is reached.
+          for (const email of chunk) {
+            if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+            const newAttempt = (email.attempt_count || 0) + 1
+            const giveUp = newAttempt >= MAX_ATTEMPTS
+            await supabase
+              .from('email_queue')
+              .update({
+                status: giveUp ? 'failed' : 'pending',
+                attempt_count: newAttempt,
+                error_log: `SMTP connection error: ${errMsg}`,
+              })
+              .eq('id', email.id)
+            if (giveUp) errorCount++
+          }
+          continue
         }
-        continue
-      }
 
-      try {
-        for (const email of emails) {
-          if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+        try {
+          for (const email of chunk) {
+            if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
-          try {
-            const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
+            try {
+              const trackedBody = injectTracking(email.body, email.id, supabaseUrl)
 
-            // Fetch sender identity from_name via campaign
-            let fromName: string | undefined
-            if (email.campaign_id) {
-              const { data: camp } = await supabase
-                .from('campaigns')
-                .select('sender_identity_id')
-                .eq('id', email.campaign_id)
-                .single()
-              if (camp?.sender_identity_id) {
-                const { data: identity } = await supabase
-                  .from('sender_identities')
-                  .select('from_name')
-                  .eq('id', camp.sender_identity_id)
-                  .single()
-                if (identity?.from_name) fromName = identity.from_name
+              // Resolve sender display name (cached per campaign)
+              let fromName: string | undefined
+              if (email.campaign_id) {
+                if (fromNameCache.has(email.campaign_id)) {
+                  fromName = fromNameCache.get(email.campaign_id)
+                } else {
+                  const { data: camp } = await supabase
+                    .from('campaigns')
+                    .select('sender_identity_id')
+                    .eq('id', email.campaign_id)
+                    .single()
+                  if (camp?.sender_identity_id) {
+                    const { data: identity } = await supabase
+                      .from('sender_identities')
+                      .select('from_name')
+                      .eq('id', camp.sender_identity_id)
+                      .single()
+                    if (identity?.from_name) fromName = identity.from_name
+                  }
+                  fromNameCache.set(email.campaign_id, fromName)
+                }
+              }
+
+              await client.sendEmail(
+                email.from_email,
+                email.to_email,
+                email.subject,
+                trackedBody,
+                fromName
+              )
+
+              await supabase
+                .from('email_queue')
+                .update({
+                  status: 'sent',
+                  attempt_count: (email.attempt_count || 0) + 1,
+                  sent_at: new Date().toISOString(),
+                })
+                .eq('id', email.id)
+
+              successCount++
+
+              // Smooth out bursts to avoid provider rate-limits (451 ...).
+              if (INTER_SEND_DELAY_MS > 0) {
+                await new Promise(r => setTimeout(r, INTER_SEND_DELAY_MS))
+              }
+            } catch (sendErr: unknown) {
+              const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
+              console.error(`Failed to send to ${email.to_email}: ${errMsg}`)
+
+              // Classify transient vs permanent SMTP errors. 4xx replies and
+              // common rate-limit phrases -> retry next tick. 5xx -> give up.
+              const isTransient =
+                /\b4\d{2}\b/.test(errMsg) ||
+                /try again later/i.test(errMsg) ||
+                /mails per session/i.test(errMsg) ||
+                /send limit exceeded/i.test(errMsg) ||
+                /temporar/i.test(errMsg)
+
+              const newAttempt = (email.attempt_count || 0) + 1
+              const giveUp = !isTransient || newAttempt >= MAX_ATTEMPTS
+
+              await supabase
+                .from('email_queue')
+                .update({
+                  status: giveUp ? 'failed' : 'pending',
+                  attempt_count: newAttempt,
+                  error_log: errMsg,
+                })
+                .eq('id', email.id)
+
+              if (giveUp) {
+                errorCount++
+              } else {
+                // Per-session limit hit -> stop using this connection;
+                // remaining emails in this chunk will go in the next session.
+                if (/mails per session|503 Bad sequence/i.test(errMsg)) {
+                  break
+                }
               }
             }
-
-            await client.sendEmail(
-              email.from_email,
-              email.to_email,
-              email.subject,
-              trackedBody,
-              fromName
-            )
-
-            await supabase
-              .from('email_queue')
-              .update({
-                status: 'sent',
-                attempt_count: (email.attempt_count || 0) + 1,
-                sent_at: new Date().toISOString(),
-              })
-              .eq('id', email.id)
-
-            successCount++
-          } catch (sendErr: unknown) {
-            const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
-            console.error(`Failed to send to ${email.to_email}: ${errMsg}`)
-
-            await supabase
-              .from('email_queue')
-              .update({
-                status: 'failed',
-                attempt_count: (email.attempt_count || 0) + 1,
-                error_log: errMsg,
-              })
-              .eq('id', email.id)
-
-            errorCount++
+          }
+        } finally {
+          if (connected) {
+            try { await client.close() } catch { /* ignore */ }
           }
         }
-      } finally {
-        await client.close()
       }
-    }
-
-    if (affectedCampaignIds.size > 0) {
-      await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
     }
 
     return new Response(
