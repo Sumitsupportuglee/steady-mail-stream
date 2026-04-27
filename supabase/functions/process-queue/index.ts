@@ -341,14 +341,32 @@ async function updateCampaignStatuses(
   }
 }
 
-// --- TRACKING INJECTION ---
+// --- TRACKING + UNSUBSCRIBE INJECTION ---
 
-function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string): string {
+async function unsubscribeToken(emailQueueId: string, secret: string): Promise<string> {
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(emailQueueId))
+  const bytes = new Uint8Array(sig)
+  let hex = ''
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+  return hex.slice(0, 32)
+}
+
+function buildUnsubscribeUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
+  return `${supabaseUrl}/functions/v1/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
+}
+
+function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string, unsubscribeUrl: string): string {
   let body = htmlBody
 
   body = body.replace(
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url) => {
+      // Don't wrap the unsubscribe link in click tracking
+      if (url === unsubscribeUrl) return `href="${url}"`
       const trackUrl = `${supabaseUrl}/functions/v1/track-click?id=${encodeURIComponent(emailQueueId)}&url=${encodeURIComponent(url)}`
       return `href="${trackUrl}"`
     }
@@ -357,10 +375,18 @@ function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: str
   const pixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${encodeURIComponent(emailQueueId)}`
   const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
 
+  const footer = `
+    <table role="presentation" width="100%" style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">
+      <tr><td style="text-align:center;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;color:#6b7280;line-height:1.5">
+        Don't want to receive these emails?
+        <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline">Unsubscribe</a>
+      </td></tr>
+    </table>`
+
   if (body.includes('</body>')) {
-    body = body.replace('</body>', `${pixel}</body>`)
+    body = body.replace('</body>', `${footer}${pixel}</body>`)
   } else {
-    body += pixel
+    body += footer + pixel
   }
 
   return body
