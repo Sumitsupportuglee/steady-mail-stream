@@ -567,6 +567,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (affectedCampaignIds.size > 0) {
+      await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
+    }
+
     return new Response(
       JSON.stringify({
         processed: pendingEmails.length,
