@@ -681,15 +681,6 @@ export default function SenderIdentities() {
                           </>
                         );
                       })()}
-
-                      <div className="text-sm text-muted-foreground space-y-2">
-                        <p><strong>Important:</strong></p>
-                        <ul className="list-disc list-inside space-y-1 ml-2">
-                          <li>DNS changes can take up to 48 hours to propagate</li>
-                          <li>You must click "Verify Domain" after adding DNS records</li>
-                          <li>If verification fails, wait a few hours and try again</li>
-                        </ul>
-                      </div>
                     </>
                   )}
                 </div>
