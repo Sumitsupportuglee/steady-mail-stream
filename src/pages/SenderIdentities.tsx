@@ -61,7 +61,7 @@ export default function SenderIdentities() {
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerifying, setIsVerifying] = useState<string | null>(null); // 'dkim' | 'spf' | 'dmarc' | null
   const [selectedIdentity, setSelectedIdentity] = useState<SenderIdentity | null>(null);
 
   // Form state
@@ -191,13 +191,11 @@ export default function SenderIdentities() {
     }
   };
 
-  const handleVerifyDomain = async (identity: SenderIdentity) => {
-    setIsVerifying(true);
+  const handleVerifyDomain = async (identity: SenderIdentity, recordType: 'dkim' | 'spf' | 'dmarc' = 'dkim') => {
+    setIsVerifying(recordType);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
+      if (!session) throw new Error('Not authenticated');
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-domain`,
@@ -207,7 +205,7 @@ export default function SenderIdentities() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ identity_id: identity.id }),
+          body: JSON.stringify({ identity_id: identity.id, record_type: recordType }),
         }
       );
 
@@ -215,26 +213,33 @@ export default function SenderIdentities() {
 
       if (result.verified) {
         toast({
-          title: 'Domain Verified!',
-          description: 'You can now send emails from this address.',
+          title: `${recordType.toUpperCase()} Verified!`,
+          description: result.message || 'Record verified successfully.',
         });
       } else {
         toast({
           title: 'Verification Pending',
-          description: result.message || 'DNS records not found yet. Please try again later.',
+          description: result.message || result.error || 'Record not found yet.',
           variant: 'destructive',
         });
       }
 
+      // Refresh and keep the same identity selected
+      const updated = await supabase
+        .from('sender_identities')
+        .select('*')
+        .eq('id', identity.id)
+        .single();
+      if (updated.data) setSelectedIdentity(updated.data as any);
       fetchIdentities();
     } catch (error: any) {
       toast({
         title: 'Verification Failed',
-        description: error.message || 'Failed to verify domain',
+        description: error.message || 'Failed to verify record',
         variant: 'destructive',
       });
     } finally {
-      setIsVerifying(false);
+      setIsVerifying(null);
     }
   };
 
