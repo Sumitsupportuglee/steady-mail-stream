@@ -33,11 +33,13 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle, Info, HelpCircle } from 'lucide-react';
+import { Plus, Mail, Copy, CheckCircle, XCircle, Loader2, Trash2, RefreshCw, AlertCircle, Info, HelpCircle, Shield, ShieldCheck, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useClient } from '@/contexts/ClientContext';
 
 const FREE_PROVIDERS = ['gmail', 'yahoo', 'outlook'];
+
+type RecordStatus = 'not_set' | 'verified' | 'failed';
 
 interface SenderIdentity {
   id: string;
@@ -47,6 +49,8 @@ interface SenderIdentity {
   dkim_record: string | null;
   email_provider: string | null;
   created_at: string;
+  spf_status?: RecordStatus;
+  dmarc_status?: RecordStatus;
 }
 
 export default function SenderIdentities() {
