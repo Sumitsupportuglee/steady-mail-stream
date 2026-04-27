@@ -12,11 +12,13 @@ interface CampaignStats {
   delivered: number;
   opened: number;       // unique openers
   clicked: number;      // unique clickers
+  unsubscribed: number; // unique unsubscribers
   totalOpens: number;   // every open event
   totalClicks: number;  // every click event
   contactedEmails: string[];
   openedEmails: string[];
   clickedEmails: string[];
+  unsubscribedEmails: string[];
 }
 
 interface ClickEvent {
@@ -24,6 +26,13 @@ interface ClickEvent {
   to_email: string;
   original_url: string;
   clicked_at: string;
+}
+
+interface UnsubEvent {
+  id: string;
+  email: string;
+  unsubscribed_at: string;
+  campaign_id: string | null;
 }
 
 export default function CRM() {
