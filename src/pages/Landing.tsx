@@ -4,6 +4,7 @@ import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { UpdatesSection } from '@/components/landing/UpdatesSection';
 import { ElevenLabsWidget } from '@/components/ElevenLabsWidget';
 import { Button } from '@/components/ui/button';
+import { PLANS } from '@/config/plans';
 import {
   Mail,
   Search,
@@ -287,45 +288,60 @@ export default function Landing() {
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
-            {/* Monthly */}
-            <div className="rounded-2xl border border-border bg-card p-8 text-center">
-              <h3 className="text-xl font-semibold">Monthly</h3>
-              <div className="mt-4">
-                <span className="text-4xl font-bold">₹2,499</span>
-                <span className="text-muted-foreground">/month</span>
-              </div>
-              <ul className="mt-6 space-y-3 text-left text-sm">
-                {['Unlimited email campaigns', 'Lead Finder with web scraping', 'Contact management', 'Open & click tracking', 'Domain verification', 'Real-time analytics'].map((f) => (
-                  <li key={f} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0" />{f}</li>
-                ))}
-              </ul>
-              <Button size="lg" variant="outline" className="w-full mt-8" asChild>
-                <Link to="/auth">Get Started</Link>
-              </Button>
-            </div>
-
-            {/* Yearly */}
-            <div className="relative rounded-2xl border-2 border-primary bg-card p-8 text-center shadow-lg">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
-                  Save ₹4,989
-                </span>
-              </div>
-              <h3 className="text-xl font-semibold">Yearly</h3>
-              <div className="mt-4">
-                <span className="text-4xl font-bold">₹24,999</span>
-                <span className="text-muted-foreground">/year</span>
-              </div>
-              <ul className="mt-6 space-y-3 text-left text-sm">
-                {['Everything in Monthly', '2 months free', 'Priority support', 'Dedicated onboarding', 'Unlimited email campaigns', 'Advanced analytics'].map((f) => (
-                  <li key={f} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0" />{f}</li>
-                ))}
-              </ul>
-              <Button size="lg" className="w-full mt-8" asChild>
-                <Link to="/auth">Get Started</Link>
-              </Button>
-            </div>
+            {PLANS.map((plan) => {
+              const isBusiness = plan.id === 'business';
+              const monthly = plan.pricing.inr.monthly;
+              const yearly = plan.pricing.inr.yearly;
+              const savings = monthly * 12 - yearly;
+              return (
+                <div
+                  key={plan.id}
+                  className={
+                    isBusiness
+                      ? 'relative rounded-2xl border-2 border-primary bg-card p-8 text-center shadow-lg'
+                      : 'rounded-2xl border border-border bg-card p-8 text-center'
+                  }
+                >
+                  {isBusiness && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
+                        Most Popular
+                      </span>
+                    </div>
+                  )}
+                  <h3 className="text-xl font-semibold">{plan.name}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground min-h-[40px]">{plan.description}</p>
+                  <div className="mt-4">
+                    <span className="text-4xl font-bold">₹{monthly.toLocaleString('en-IN')}</span>
+                    <span className="text-muted-foreground">/month</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    or ₹{yearly.toLocaleString('en-IN')}/year · save ₹{savings.toLocaleString('en-IN')}
+                  </p>
+                  <ul className="mt-6 space-y-3 text-left text-sm">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    size="lg"
+                    variant={isBusiness ? 'default' : 'outline'}
+                    className="w-full mt-8"
+                    asChild
+                  >
+                    <Link to="/auth">Get Started</Link>
+                  </Button>
+                </div>
+              );
+            })}
           </div>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Prices shown in INR. USD pricing available at checkout based on your location.
+          </p>
         </div>
       </section>
 
