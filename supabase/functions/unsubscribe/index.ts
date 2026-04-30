@@ -55,6 +55,11 @@ function result(req: Request, title: string, message: string, ok = true): Respon
   })
 }
 
+function appUnsubscribeUrl(emailQueueId: string, token: string): string {
+  const appUrl = Deno.env.get('APP_URL') || Deno.env.get('SITE_URL') || 'https://steady-mail-stream.lovable.app'
+  return `${appUrl.replace(/\/$/, '')}/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${encodeURIComponent(token)}`
+}
+
 async function processUnsubscribe(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const emailQueueId = url.searchParams.get('id')
@@ -62,6 +67,10 @@ async function processUnsubscribe(req: Request): Promise<Response> {
 
   if (!emailQueueId || !token) {
     return result(req, 'Invalid link', 'This unsubscribe link is missing required information.', false)
+  }
+
+  if (req.method === 'GET' && !wantsJson(req)) {
+    return Response.redirect(appUnsubscribeUrl(emailQueueId, token), 302)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
