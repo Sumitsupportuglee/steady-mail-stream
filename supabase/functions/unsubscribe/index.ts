@@ -48,7 +48,8 @@ function wantsJson(req: Request): boolean {
 
 function result(req: Request, title: string, message: string, ok = true): Response {
   if (!wantsJson(req)) return htmlPage(title, message, ok)
-  return new Response(JSON.stringify({ ok, title, message }), {
+  const plainMessage = message.replace(/<[^>]*>/g, '')
+  return new Response(JSON.stringify({ ok, title, message: plainMessage }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   })
