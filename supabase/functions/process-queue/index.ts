@@ -361,6 +361,39 @@ function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 }
 
+function encodeQuotedPrintable(input: string): string {
+  const bytes = new TextEncoder().encode(input.replace(/\r\n/g, '\n').replace(/\r/g, '\n'))
+  const lines: string[] = []
+  let line = ''
+
+  const pushSoftBreak = () => {
+    lines.push(line + '=')
+    line = ''
+  }
+
+  for (const byte of bytes) {
+    if (byte === 0x0a) {
+      lines.push(line.replace(/[ \t]+$/g, (m) => m.split('').map((ch) => `=${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join('')))
+      line = ''
+      continue
+    }
+
+    const chunk = (byte >= 33 && byte <= 60) || (byte >= 62 && byte <= 126)
+      ? String.fromCharCode(byte)
+      : `=${byte.toString(16).toUpperCase().padStart(2, '0')}`
+
+    if (line.length + chunk.length > 73) pushSoftBreak()
+    line += chunk
+  }
+
+  lines.push(line.replace(/[ \t]+$/g, (m) => m.split('').map((ch) => `=${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join('')))
+  return lines.join('\r\n')
+}
+
+function dotStuff(input: string): string {
+  return input.replace(/^\./gm, '..')
+}
+
 function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string, unsubscribeUrl: string): string {
   let body = htmlBody
   // Pre-escaped form of the unsubscribe URL that may already exist in body HTML
