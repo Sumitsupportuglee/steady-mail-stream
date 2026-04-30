@@ -655,7 +655,7 @@ export default function SenderIdentities() {
                               <RecordRow label="Host / Name" value="@" />
                               <RecordRow label="Value" value={spfValue} />
                               <p className="text-xs text-muted-foreground">
-                                Already have an SPF record? Don't add a second one — instead, merge <code className="bg-background px-1 rounded">include:amazonses.com</code> into your existing record.
+                                Already have an SPF record? Don't add a second one — instead, merge <code className="bg-background px-1 rounded">include:{spfInclude}</code> into your existing record.
                               </p>
                               <Button
                                 onClick={() => handleVerifyDomain(selectedIdentity, 'spf')}
