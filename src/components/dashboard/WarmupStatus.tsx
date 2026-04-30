@@ -269,6 +269,42 @@ export function WarmupStatus() {
     };
   }, [user, selected]);
 
+  // Sync the user's daily send limit to follow the computed health stage.
+  // If the user already has a higher limit (established reputation / manual override),
+  // do not lower it — only raise it as the account warms up.
+  useEffect(() => {
+    if (!user || !metrics) return;
+    const score = computeHealthScore(metrics);
+    const stage = deriveStage(metrics, score);
+    if (!stage.maxDaily) return;
+
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('daily_send_limit')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+
+      const current = profile?.daily_send_limit ?? 0;
+      // For "At Risk" we cap down; otherwise we only raise.
+      const shouldUpdate =
+        stage.name === 'At Risk' ? current > stage.maxDaily : current < stage.maxDaily;
+
+      if (shouldUpdate) {
+        await supabase
+          .from('profiles')
+          .update({ daily_send_limit: stage.maxDaily })
+          .eq('id', user.id);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, metrics]);
+
   const handleSelect = (id: string) => {
     setSelectedId(id);
     localStorage.setItem('warmupSelectedSmtpId', id);
