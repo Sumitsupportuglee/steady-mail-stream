@@ -518,18 +518,22 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
-                  {/* Free provider — no DNS needed */}
-                  {selectedIsFreeProvider ? (
+                  {/* Personal free mailbox (@gmail.com etc.) — DNS not applicable */}
+                  {selectedIsFreeProvider && isPersonalMailbox ? (
                     <Alert className="border-green-500/30 bg-green-500/5">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <AlertTitle>No DNS Setup Required</AlertTitle>
                       <AlertDescription>
-                        <span className="capitalize">{selectedIdentity.email_provider}</span> identities don't require DNS verification. Your identity is verified and ready to use. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
+                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
                       </AlertDescription>
                     </Alert>
                   ) : (
                     <>
-                      {selectedIdentity.domain_status === 'unverified' && (
+                      {/* For custom domain identities (incl. those hosted on Google Workspace / M365),
+                          DKIM is only "required" when sending through our SES infrastructure. For
+                          identities that send through their own provider's SMTP, SPF + DMARC alone
+                          significantly improve deliverability. */}
+                      {!isFreeProviderCustomDomain && selectedIdentity.domain_status === 'unverified' && (
                         <Alert className="border-destructive/50 bg-destructive/10">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>Action Required</AlertTitle>
@@ -541,14 +545,16 @@ export default function SenderIdentities() {
                       )}
 
                       {(() => {
-                        const domain = selectedIdentity.from_email.split('@')[1] || '';
+                        const domain = selectedDomain;
                         const dkimHost = selectedIdentity.dkim_record?.split('.')[0] || '';
                         const dkimRecordHost = `${dkimHost}._domainkey`;
                         const dkimRecordValue = `${dkimHost}.dkim.amazonses.com`;
-                        const spfValue = `v=spf1 include:amazonses.com ~all`;
+                        const spfInclude = spfIncludeFor(selectedIdentity.email_provider);
+                        const spfValue = `v=spf1 include:${spfInclude} ~all`;
                         const dmarcValue = `v=DMARC1; p=none; rua=mailto:dmarc@${domain}; pct=100; aspf=r; adkim=r`;
                         const spfStatus: RecordStatus = selectedIdentity.spf_status || 'not_set';
                         const dmarcStatus: RecordStatus = selectedIdentity.dmarc_status || 'not_set';
+                        const showDkim = !isFreeProviderCustomDomain; // Only show DKIM for SES-routed identities
 
                         const StatusBadge = ({ status, required }: { status: 'verified' | 'unverified' | RecordStatus; required?: boolean }) => {
                           if (status === 'verified') {
