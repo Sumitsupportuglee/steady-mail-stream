@@ -421,9 +421,18 @@ export function WarmupStatus() {
         )}
 
         {stage.maxDaily > 0 && (
-          <div className="flex items-center justify-between text-sm rounded-lg border border-border p-3">
-            <span className="text-muted-foreground">Recommended daily limit</span>
-            <span className="font-semibold">{stage.maxDaily} emails/day</span>
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Daily sending limit (auto-tuned)</span>
+              <span className="font-semibold">{stage.maxDaily} emails/day</span>
+            </div>
+            <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <p>
+                Note: You can send more than the daily limit if your sending account already
+                has an established reputation. Ask an admin to raise your limit in Rate Limits.
+              </p>
+            </div>
           </div>
         )}
       </CardContent>
