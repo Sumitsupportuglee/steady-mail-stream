@@ -31,7 +31,33 @@ function htmlPage(title: string, message: string, ok = true): Response {
   h1{font-size:22px;margin:0 0 8px}
   p{color:#475569;line-height:1.5;margin:0}
 </style></head><body><div class="card"><div class="ico">${ok ? '✓' : '!'}</div><h1>${title}</h1><p>${message}</p></div></body></html>`
-  return new Response(html, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' } })
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      ...corsHeaders,
+    },
+  })
+}
+
+function wantsJson(req: Request): boolean {
+  const accept = req.headers.get('accept') || ''
+  return accept.includes('application/json')
+}
+
+function result(req: Request, title: string, message: string, ok = true): Response {
+  if (!wantsJson(req)) return htmlPage(title, message, ok)
+  const plainMessage = message.replace(/<[^>]*>/g, '')
+  return new Response(JSON.stringify({ ok, title, message: plainMessage }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  })
+}
+
+function appUnsubscribeUrl(emailQueueId: string, token: string): string {
+  const appUrl = Deno.env.get('APP_URL') || Deno.env.get('SITE_URL') || 'https://steady-mail-stream.lovable.app'
+  return `${appUrl.replace(/\/$/, '')}/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${encodeURIComponent(token)}`
 }
 
 async function processUnsubscribe(req: Request): Promise<Response> {
@@ -40,14 +66,18 @@ async function processUnsubscribe(req: Request): Promise<Response> {
   const token = url.searchParams.get('token')
 
   if (!emailQueueId || !token) {
-    return htmlPage('Invalid link', 'This unsubscribe link is missing required information.', false)
+    return result(req, 'Invalid link', 'This unsubscribe link is missing required information.', false)
+  }
+
+  if (req.method === 'GET' && !wantsJson(req)) {
+    return Response.redirect(appUnsubscribeUrl(emailQueueId, token), 302)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const expected = await hmacToken(emailQueueId, serviceKey)
   if (expected !== token) {
-    return htmlPage('Invalid link', 'This unsubscribe link is invalid or has been tampered with.', false)
+    return result(req, 'Invalid link', 'This unsubscribe link is invalid or has been tampered with.', false)
   }
 
   const supabase = createClient(supabaseUrl, serviceKey)
@@ -58,7 +88,7 @@ async function processUnsubscribe(req: Request): Promise<Response> {
     .single()
 
   if (!queueItem) {
-    return htmlPage('Already unsubscribed', 'We could not find this email, but you will not receive further messages.', true)
+    return result(req, 'Already unsubscribed', 'We could not find this email, but you will not receive further messages.', true)
   }
 
   const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown'
@@ -75,7 +105,8 @@ async function processUnsubscribe(req: Request): Promise<Response> {
     user_agent: userAgent,
   })
 
-  return htmlPage(
+  return result(
+    req,
     'You have been unsubscribed',
     `We have removed <strong>${queueItem.to_email}</strong> from this sender's mailing list. You will not receive further emails from this campaign.`,
     true

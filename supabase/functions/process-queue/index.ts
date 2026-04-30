@@ -166,9 +166,7 @@ class SmtpClient {
       `X-Mailer: SteadyMail/1.0`,
     ]
 
-    const qpBody = htmlBody
-      .replace(/\r\n/g, '\n')
-      .replace(/\n/g, '\r\n')
+    const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
 
     const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
     await this.sendCommand(emailContent)
@@ -356,11 +354,49 @@ async function unsubscribeToken(emailQueueId: string, secret: string): Promise<s
 }
 
 function buildUnsubscribeUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
+  const appUrl = Deno.env.get('APP_URL') || Deno.env.get('SITE_URL') || 'https://steady-mail-stream.lovable.app'
+  return `${appUrl.replace(/\/$/, '')}/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
+}
+
+function buildUnsubscribeFunctionUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
   return `${supabaseUrl}/functions/v1/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
 }
 
 function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
+function encodeQuotedPrintable(input: string): string {
+  const bytes = new TextEncoder().encode(input.replace(/\r\n/g, '\n').replace(/\r/g, '\n'))
+  const lines: string[] = []
+  let line = ''
+
+  const pushSoftBreak = () => {
+    lines.push(line + '=')
+    line = ''
+  }
+
+  for (const byte of bytes) {
+    if (byte === 0x0a) {
+      lines.push(line.replace(/[ \t]+$/g, (m) => m.split('').map((ch) => `=${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join('')))
+      line = ''
+      continue
+    }
+
+    const chunk = (byte >= 33 && byte <= 60) || (byte >= 62 && byte <= 126)
+      ? String.fromCharCode(byte)
+      : `=${byte.toString(16).toUpperCase().padStart(2, '0')}`
+
+    if (line.length + chunk.length > 73) pushSoftBreak()
+    line += chunk
+  }
+
+  lines.push(line.replace(/[ \t]+$/g, (m) => m.split('').map((ch) => `=${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join('')))
+  return lines.join('\r\n')
+}
+
+function dotStuff(input: string): string {
+  return input.replace(/^\./gm, '..')
 }
 
 function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string, unsubscribeUrl: string): string {
@@ -543,6 +579,7 @@ Deno.serve(async (req) => {
 
               const token = await unsubscribeToken(email.id, supabaseServiceKey)
               const unsubUrl = buildUnsubscribeUrl(supabaseUrl, email.id, token)
+              const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
               // Resolve sender display name (cached per campaign)
@@ -574,7 +611,7 @@ Deno.serve(async (req) => {
                 email.subject,
                 trackedBody,
                 fromName,
-                unsubUrl
+                unsubFunctionUrl
               )
 
               await supabase
