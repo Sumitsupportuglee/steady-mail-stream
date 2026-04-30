@@ -96,7 +96,7 @@ function deriveStage(m: HealthMetrics, score: number): StageInfo {
     name: 'Ready for Campaigns',
     description: 'This SMTP account has a strong sending reputation. You can run full-volume campaigns.',
     recommendation: 'Maintain list hygiene and avoid sudden volume spikes to keep deliverability high.',
-    maxDaily: 0,
+    maxDaily: 500,
     icon: <ShieldCheck className="h-5 w-5" />,
     color: 'text-green-500',
     badgeClass: 'bg-green-100 text-green-700 border-green-200',
@@ -269,6 +269,42 @@ export function WarmupStatus() {
     };
   }, [user, selected]);
 
+  // Sync the user's daily send limit to follow the computed health stage.
+  // If the user already has a higher limit (established reputation / manual override),
+  // do not lower it — only raise it as the account warms up.
+  useEffect(() => {
+    if (!user || !metrics) return;
+    const score = computeHealthScore(metrics);
+    const stage = deriveStage(metrics, score);
+    if (!stage.maxDaily) return;
+
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('daily_send_limit')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+
+      const current = profile?.daily_send_limit ?? 0;
+      // For "At Risk" we cap down; otherwise we only raise.
+      const shouldUpdate =
+        stage.name === 'At Risk' ? current > stage.maxDaily : current < stage.maxDaily;
+
+      if (shouldUpdate) {
+        await supabase
+          .from('profiles')
+          .update({ daily_send_limit: stage.maxDaily })
+          .eq('id', user.id);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, metrics]);
+
   const handleSelect = (id: string) => {
     setSelectedId(id);
     localStorage.setItem('warmupSelectedSmtpId', id);
@@ -385,9 +421,18 @@ export function WarmupStatus() {
         )}
 
         {stage.maxDaily > 0 && (
-          <div className="flex items-center justify-between text-sm rounded-lg border border-border p-3">
-            <span className="text-muted-foreground">Recommended daily limit</span>
-            <span className="font-semibold">{stage.maxDaily} emails/day</span>
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Daily sending limit (auto-tuned)</span>
+              <span className="font-semibold">{stage.maxDaily} emails/day</span>
+            </div>
+            <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <p>
+                Note: You can send more than the daily limit if your sending account already
+                has an established reputation. Ask an admin to raise your limit in Rate Limits.
+              </p>
+            </div>
           </div>
         )}
       </CardContent>
