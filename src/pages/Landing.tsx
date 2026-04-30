@@ -4,6 +4,7 @@ import { ReviewsSection } from '@/components/reviews/ReviewsSection';
 import { UpdatesSection } from '@/components/landing/UpdatesSection';
 import { ElevenLabsWidget } from '@/components/ElevenLabsWidget';
 import { Button } from '@/components/ui/button';
+import { PLANS } from '@/config/plans';
 import {
   Mail,
   Search,
