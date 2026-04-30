@@ -376,10 +376,11 @@ function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: str
   const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
 
   const footer = `
-    <table role="presentation" width="100%" style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">
-      <tr><td style="text-align:center;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;color:#6b7280;line-height:1.5">
-        Don't want to receive these emails?
-        <a href="${unsubscribeUrl}" style="color:#6b7280;text-decoration:underline">Unsubscribe</a>
+    <table role="presentation" width="100%" style="margin-top:40px;border-top:1px solid #e5e7eb;padding-top:20px">
+      <tr><td style="text-align:center;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;color:#6b7280;line-height:1.6">
+        You're receiving this email because you opted in or were contacted by the sender.<br/>
+        If you'd prefer not to receive further emails,
+        <a href="${unsubscribeUrl}" style="color:#2563eb;text-decoration:underline;font-weight:600">click here to unsubscribe</a>.
       </td></tr>
     </table>`
 
