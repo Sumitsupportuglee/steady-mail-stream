@@ -600,34 +600,46 @@ export default function SenderIdentities() {
                               </AlertDescription>
                             </Alert>
 
-                            {/* DKIM */}
-                            <div className="rounded-lg bg-muted p-4 space-y-3">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <h4 className="font-medium flex items-center gap-2">
-                                  <ShieldCheck className="h-4 w-4 text-primary" />
-                                  1. DKIM (CNAME) <span className="text-xs text-muted-foreground font-normal">— required</span>
-                                </h4>
-                                <StatusBadge status={selectedIdentity.domain_status} required />
+                            {/* DKIM — only relevant for SES-routed identities */}
+                            {showDkim && (
+                              <div className="rounded-lg bg-muted p-4 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <h4 className="font-medium flex items-center gap-2">
+                                    <ShieldCheck className="h-4 w-4 text-primary" />
+                                    1. DKIM (CNAME) <span className="text-xs text-muted-foreground font-normal">— required</span>
+                                  </h4>
+                                  <StatusBadge status={selectedIdentity.domain_status} required />
+                                </div>
+                                <p className="text-sm text-muted-foreground">Cryptographically signs your emails so receivers can verify they're authentic.</p>
+                                <RecordRow label="Type" value="CNAME" />
+                                <RecordRow label="Host / Name" value={dkimRecordHost} />
+                                <RecordRow label="Value / Points to" value={dkimRecordValue} />
+                                <Button
+                                  onClick={() => handleVerifyDomain(selectedIdentity, 'dkim')}
+                                  disabled={isVerifying !== null || selectedIdentity.domain_status === 'verified'}
+                                  className="w-full"
+                                  size="sm"
+                                >
+                                  {isVerifying === 'dkim' ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                  ) : selectedIdentity.domain_status === 'verified' ? (
+                                    <><CheckCircle className="mr-2 h-4 w-4" /> DKIM Verified</>
+                                  ) : (
+                                    <><RefreshCw className="mr-2 h-4 w-4" /> Verify DKIM</>
+                                  )}
+                                </Button>
                               </div>
-                              <p className="text-sm text-muted-foreground">Cryptographically signs your emails so receivers can verify they're authentic.</p>
-                              <RecordRow label="Type" value="CNAME" />
-                              <RecordRow label="Host / Name" value={dkimRecordHost} />
-                              <RecordRow label="Value / Points to" value={dkimRecordValue} />
-                              <Button
-                                onClick={() => handleVerifyDomain(selectedIdentity, 'dkim')}
-                                disabled={isVerifying !== null || selectedIdentity.domain_status === 'verified'}
-                                className="w-full"
-                                size="sm"
-                              >
-                                {isVerifying === 'dkim' ? (
-                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
-                                ) : selectedIdentity.domain_status === 'verified' ? (
-                                  <><CheckCircle className="mr-2 h-4 w-4" /> DKIM Verified</>
-                                ) : (
-                                  <><RefreshCw className="mr-2 h-4 w-4" /> Verify DKIM</>
-                                )}
-                              </Button>
-                            </div>
+                            )}
+
+                            {isFreeProviderCustomDomain && (
+                              <Alert className="border-primary/30 bg-primary/5">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Custom domain on <span className="capitalize">{selectedIdentity.email_provider}</span></AlertTitle>
+                                <AlertDescription className="text-sm">
+                                  Your provider handles DKIM automatically. Adding the SPF and DMARC records below to your domain's DNS will significantly improve inbox delivery.
+                                </AlertDescription>
+                              </Alert>
+                            )}
 
                             {/* SPF */}
                             <div className="rounded-lg bg-muted p-4 space-y-3">
