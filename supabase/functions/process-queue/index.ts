@@ -354,6 +354,11 @@ async function unsubscribeToken(emailQueueId: string, secret: string): Promise<s
 }
 
 function buildUnsubscribeUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
+  const appUrl = Deno.env.get('APP_URL') || Deno.env.get('SITE_URL') || 'https://steady-mail-stream.lovable.app'
+  return `${appUrl.replace(/\/$/, '')}/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
+}
+
+function buildUnsubscribeFunctionUrl(supabaseUrl: string, emailQueueId: string, token: string): string {
   return `${supabaseUrl}/functions/v1/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
 }
 
@@ -574,6 +579,7 @@ Deno.serve(async (req) => {
 
               const token = await unsubscribeToken(email.id, supabaseServiceKey)
               const unsubUrl = buildUnsubscribeUrl(supabaseUrl, email.id, token)
+              const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
               // Resolve sender display name (cached per campaign)
@@ -605,7 +611,7 @@ Deno.serve(async (req) => {
                 email.subject,
                 trackedBody,
                 fromName,
-                unsubUrl
+                unsubFunctionUrl
               )
 
               await supabase
