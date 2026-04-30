@@ -31,7 +31,10 @@ function htmlPage(title: string, message: string, ok = true): Response {
   h1{font-size:22px;margin:0 0 8px}
   p{color:#475569;line-height:1.5;margin:0}
 </style></head><body><div class="card"><div class="ico">${ok ? '✓' : '!'}</div><h1>${title}</h1><p>${message}</p></div></body></html>`
-  return new Response(html, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' } })
+  const headers = new Headers(corsHeaders)
+  headers.set('content-type', 'text/html; charset=utf-8')
+  headers.set('cache-control', 'no-store')
+  return new Response(html, { status: 200, headers })
 }
 
 async function processUnsubscribe(req: Request): Promise<Response> {
