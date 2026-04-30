@@ -359,31 +359,40 @@ function buildUnsubscribeUrl(supabaseUrl: string, emailQueueId: string, token: s
   return `${supabaseUrl}/functions/v1/unsubscribe?id=${encodeURIComponent(emailQueueId)}&token=${token}`
 }
 
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 function injectTracking(htmlBody: string, emailQueueId: string, supabaseUrl: string, unsubscribeUrl: string): string {
   let body = htmlBody
+  // Pre-escaped form of the unsubscribe URL that may already exist in body HTML
+  const unsubEscaped = escapeHtmlAttr(unsubscribeUrl)
 
   body = body.replace(
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url) => {
-      // Don't wrap the unsubscribe link in click tracking
-      if (url === unsubscribeUrl) return `href="${url}"`
+      // Don't wrap the unsubscribe link in click tracking (raw or html-escaped)
+      if (url === unsubscribeUrl || url === unsubEscaped) return `href="${unsubEscaped}"`
       const trackUrl = `${supabaseUrl}/functions/v1/track-click?id=${encodeURIComponent(emailQueueId)}&url=${encodeURIComponent(url)}`
-      return `href="${trackUrl}"`
+      return `href="${escapeHtmlAttr(trackUrl)}"`
     }
   )
 
   const pixelUrl = `${supabaseUrl}/functions/v1/track-open?id=${encodeURIComponent(emailQueueId)}`
-  const pixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`
+  const pixel = `<img src="${escapeHtmlAttr(pixelUrl)}" width="1" height="1" style="display:none" alt="" />`
 
   // Footer is wrapped in its own div (not nested table) and uses simple text
   // to prevent Gmail from collapsing it into the "..." quoted-content section.
+  // IMPORTANT: ampersands in URL must be HTML-escaped to &amp; or some email
+  // clients will mangle the query string and drop the &token= parameter,
+  // causing the unsubscribe page to show "Invalid link - missing information".
   const footer = `
 <div style="margin-top:32px;padding:20px 16px;border-top:1px solid #e5e7eb;text-align:center;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#6b7280;line-height:1.6">
   <p style="margin:0 0 8px 0;color:#6b7280">You're receiving this email because you opted in or were contacted by the sender.</p>
   <p style="margin:0;color:#374151;font-size:14px">
-    <a href="${unsubscribeUrl}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:underline;font-weight:600">Unsubscribe from this list</a>
+    <a href="${unsubEscaped}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:underline;font-weight:600">Unsubscribe from this list</a>
     &nbsp;·&nbsp;
-    <a href="${unsubscribeUrl}" target="_blank" rel="noopener" style="color:#6b7280;text-decoration:underline">Opt out</a>
+    <a href="${unsubEscaped}" target="_blank" rel="noopener" style="color:#6b7280;text-decoration:underline">Opt out</a>
   </p>
 </div>`
 
