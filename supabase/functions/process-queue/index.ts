@@ -166,9 +166,7 @@ class SmtpClient {
       `X-Mailer: SteadyMail/1.0`,
     ]
 
-    const qpBody = htmlBody
-      .replace(/\r\n/g, '\n')
-      .replace(/\n/g, '\r\n')
+    const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
 
     const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
     await this.sendCommand(emailContent)
