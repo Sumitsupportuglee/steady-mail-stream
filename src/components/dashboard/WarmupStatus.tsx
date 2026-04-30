@@ -96,7 +96,7 @@ function deriveStage(m: HealthMetrics, score: number): StageInfo {
     name: 'Ready for Campaigns',
     description: 'This SMTP account has a strong sending reputation. You can run full-volume campaigns.',
     recommendation: 'Maintain list hygiene and avoid sudden volume spikes to keep deliverability high.',
-    maxDaily: 0,
+    maxDaily: 500,
     icon: <ShieldCheck className="h-5 w-5" />,
     color: 'text-green-500',
     badgeClass: 'bg-green-100 text-green-700 border-green-200',
