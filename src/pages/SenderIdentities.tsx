@@ -255,6 +255,25 @@ export default function SenderIdentities() {
     ? isFreeProvider(selectedIdentity.email_provider)
     : false;
 
+  // Detect whether a free-provider identity is actually a personal mailbox
+  // (e.g. @gmail.com) vs a custom domain hosted on Google Workspace / M365 /
+  // Yahoo Business. Custom-domain free-provider identities still benefit
+  // hugely from SPF + DMARC, so we surface the records for them.
+  const PERSONAL_FREE_DOMAINS = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.in', 'yahoo.co.uk', 'ymail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
+  const selectedDomain = selectedIdentity?.from_email.split('@')[1]?.toLowerCase() || '';
+  const isPersonalMailbox = PERSONAL_FREE_DOMAINS.includes(selectedDomain);
+  const isFreeProviderCustomDomain = selectedIsFreeProvider && !isPersonalMailbox;
+
+  // SPF include directive based on the underlying provider
+  const spfIncludeFor = (provider: string | null | undefined): string => {
+    switch (provider) {
+      case 'gmail': return '_spf.google.com';
+      case 'outlook': return 'spf.protection.outlook.com';
+      case 'yahoo': return '_spf.mail.yahoo.com';
+      default: return 'amazonses.com';
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -499,18 +518,22 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
-                  {/* Free provider — no DNS needed */}
-                  {selectedIsFreeProvider ? (
+                  {/* Personal free mailbox (@gmail.com etc.) — DNS not applicable */}
+                  {selectedIsFreeProvider && isPersonalMailbox ? (
                     <Alert className="border-green-500/30 bg-green-500/5">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <AlertTitle>No DNS Setup Required</AlertTitle>
                       <AlertDescription>
-                        <span className="capitalize">{selectedIdentity.email_provider}</span> identities don't require DNS verification. Your identity is verified and ready to use. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
+                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
                       </AlertDescription>
                     </Alert>
                   ) : (
                     <>
-                      {selectedIdentity.domain_status === 'unverified' && (
+                      {/* For custom domain identities (incl. those hosted on Google Workspace / M365),
+                          DKIM is only "required" when sending through our SES infrastructure. For
+                          identities that send through their own provider's SMTP, SPF + DMARC alone
+                          significantly improve deliverability. */}
+                      {!isFreeProviderCustomDomain && selectedIdentity.domain_status === 'unverified' && (
                         <Alert className="border-destructive/50 bg-destructive/10">
                           <AlertCircle className="h-4 w-4" />
                           <AlertTitle>Action Required</AlertTitle>
@@ -522,14 +545,16 @@ export default function SenderIdentities() {
                       )}
 
                       {(() => {
-                        const domain = selectedIdentity.from_email.split('@')[1] || '';
+                        const domain = selectedDomain;
                         const dkimHost = selectedIdentity.dkim_record?.split('.')[0] || '';
                         const dkimRecordHost = `${dkimHost}._domainkey`;
                         const dkimRecordValue = `${dkimHost}.dkim.amazonses.com`;
-                        const spfValue = `v=spf1 include:amazonses.com ~all`;
+                        const spfInclude = spfIncludeFor(selectedIdentity.email_provider);
+                        const spfValue = `v=spf1 include:${spfInclude} ~all`;
                         const dmarcValue = `v=DMARC1; p=none; rua=mailto:dmarc@${domain}; pct=100; aspf=r; adkim=r`;
                         const spfStatus: RecordStatus = selectedIdentity.spf_status || 'not_set';
                         const dmarcStatus: RecordStatus = selectedIdentity.dmarc_status || 'not_set';
+                        const showDkim = !isFreeProviderCustomDomain; // Only show DKIM for SES-routed identities
 
                         const StatusBadge = ({ status, required }: { status: 'verified' | 'unverified' | RecordStatus; required?: boolean }) => {
                           if (status === 'verified') {
@@ -575,34 +600,46 @@ export default function SenderIdentities() {
                               </AlertDescription>
                             </Alert>
 
-                            {/* DKIM */}
-                            <div className="rounded-lg bg-muted p-4 space-y-3">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <h4 className="font-medium flex items-center gap-2">
-                                  <ShieldCheck className="h-4 w-4 text-primary" />
-                                  1. DKIM (CNAME) <span className="text-xs text-muted-foreground font-normal">— required</span>
-                                </h4>
-                                <StatusBadge status={selectedIdentity.domain_status} required />
+                            {/* DKIM — only relevant for SES-routed identities */}
+                            {showDkim && (
+                              <div className="rounded-lg bg-muted p-4 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <h4 className="font-medium flex items-center gap-2">
+                                    <ShieldCheck className="h-4 w-4 text-primary" />
+                                    1. DKIM (CNAME) <span className="text-xs text-muted-foreground font-normal">— required</span>
+                                  </h4>
+                                  <StatusBadge status={selectedIdentity.domain_status} required />
+                                </div>
+                                <p className="text-sm text-muted-foreground">Cryptographically signs your emails so receivers can verify they're authentic.</p>
+                                <RecordRow label="Type" value="CNAME" />
+                                <RecordRow label="Host / Name" value={dkimRecordHost} />
+                                <RecordRow label="Value / Points to" value={dkimRecordValue} />
+                                <Button
+                                  onClick={() => handleVerifyDomain(selectedIdentity, 'dkim')}
+                                  disabled={isVerifying !== null || selectedIdentity.domain_status === 'verified'}
+                                  className="w-full"
+                                  size="sm"
+                                >
+                                  {isVerifying === 'dkim' ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+                                  ) : selectedIdentity.domain_status === 'verified' ? (
+                                    <><CheckCircle className="mr-2 h-4 w-4" /> DKIM Verified</>
+                                  ) : (
+                                    <><RefreshCw className="mr-2 h-4 w-4" /> Verify DKIM</>
+                                  )}
+                                </Button>
                               </div>
-                              <p className="text-sm text-muted-foreground">Cryptographically signs your emails so receivers can verify they're authentic.</p>
-                              <RecordRow label="Type" value="CNAME" />
-                              <RecordRow label="Host / Name" value={dkimRecordHost} />
-                              <RecordRow label="Value / Points to" value={dkimRecordValue} />
-                              <Button
-                                onClick={() => handleVerifyDomain(selectedIdentity, 'dkim')}
-                                disabled={isVerifying !== null || selectedIdentity.domain_status === 'verified'}
-                                className="w-full"
-                                size="sm"
-                              >
-                                {isVerifying === 'dkim' ? (
-                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
-                                ) : selectedIdentity.domain_status === 'verified' ? (
-                                  <><CheckCircle className="mr-2 h-4 w-4" /> DKIM Verified</>
-                                ) : (
-                                  <><RefreshCw className="mr-2 h-4 w-4" /> Verify DKIM</>
-                                )}
-                              </Button>
-                            </div>
+                            )}
+
+                            {isFreeProviderCustomDomain && (
+                              <Alert className="border-primary/30 bg-primary/5">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Custom domain on <span className="capitalize">{selectedIdentity.email_provider}</span></AlertTitle>
+                                <AlertDescription className="text-sm">
+                                  Your provider handles DKIM automatically. Adding the SPF and DMARC records below to your domain's DNS will significantly improve inbox delivery.
+                                </AlertDescription>
+                              </Alert>
+                            )}
 
                             {/* SPF */}
                             <div className="rounded-lg bg-muted p-4 space-y-3">
@@ -618,7 +655,7 @@ export default function SenderIdentities() {
                               <RecordRow label="Host / Name" value="@" />
                               <RecordRow label="Value" value={spfValue} />
                               <p className="text-xs text-muted-foreground">
-                                Already have an SPF record? Don't add a second one — instead, merge <code className="bg-background px-1 rounded">include:amazonses.com</code> into your existing record.
+                                Already have an SPF record? Don't add a second one — instead, merge <code className="bg-background px-1 rounded">include:{spfInclude}</code> into your existing record.
                               </p>
                               <Button
                                 onClick={() => handleVerifyDomain(selectedIdentity, 'spf')}
