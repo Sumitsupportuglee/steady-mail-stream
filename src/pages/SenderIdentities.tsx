@@ -255,6 +255,25 @@ export default function SenderIdentities() {
     ? isFreeProvider(selectedIdentity.email_provider)
     : false;
 
+  // Detect whether a free-provider identity is actually a personal mailbox
+  // (e.g. @gmail.com) vs a custom domain hosted on Google Workspace / M365 /
+  // Yahoo Business. Custom-domain free-provider identities still benefit
+  // hugely from SPF + DMARC, so we surface the records for them.
+  const PERSONAL_FREE_DOMAINS = ['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.in', 'yahoo.co.uk', 'ymail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
+  const selectedDomain = selectedIdentity?.from_email.split('@')[1]?.toLowerCase() || '';
+  const isPersonalMailbox = PERSONAL_FREE_DOMAINS.includes(selectedDomain);
+  const isFreeProviderCustomDomain = selectedIsFreeProvider && !isPersonalMailbox;
+
+  // SPF include directive based on the underlying provider
+  const spfIncludeFor = (provider: string | null | undefined): string => {
+    switch (provider) {
+      case 'gmail': return '_spf.google.com';
+      case 'outlook': return 'spf.protection.outlook.com';
+      case 'yahoo': return '_spf.mail.yahoo.com';
+      default: return 'amazonses.com';
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
