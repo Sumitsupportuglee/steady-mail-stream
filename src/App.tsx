@@ -26,6 +26,7 @@ import Clients from "./pages/Clients";
 import ClientReport from "./pages/ClientReport";
 import CRM from "./pages/CRM";
 import Integrations from "./pages/Integrations";
+import Unsubscribe from "./pages/Unsubscribe";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -47,6 +48,7 @@ const App = () => (
             <Routes>
               {/* Public routes */}
               <Route path="/auth" element={<Auth />} />
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
               
               {/* Protected routes */}
               <Route path="/" element={<Landing />} />
