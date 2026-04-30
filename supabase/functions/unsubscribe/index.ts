@@ -41,20 +41,33 @@ function htmlPage(title: string, message: string, ok = true): Response {
   })
 }
 
+function wantsJson(req: Request): boolean {
+  const accept = req.headers.get('accept') || ''
+  return accept.includes('application/json')
+}
+
+function result(req: Request, title: string, message: string, ok = true): Response {
+  if (!wantsJson(req)) return htmlPage(title, message, ok)
+  return new Response(JSON.stringify({ ok, title, message }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  })
+}
+
 async function processUnsubscribe(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const emailQueueId = url.searchParams.get('id')
   const token = url.searchParams.get('token')
 
   if (!emailQueueId || !token) {
-    return htmlPage('Invalid link', 'This unsubscribe link is missing required information.', false)
+    return result(req, 'Invalid link', 'This unsubscribe link is missing required information.', false)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const expected = await hmacToken(emailQueueId, serviceKey)
   if (expected !== token) {
-    return htmlPage('Invalid link', 'This unsubscribe link is invalid or has been tampered with.', false)
+    return result(req, 'Invalid link', 'This unsubscribe link is invalid or has been tampered with.', false)
   }
 
   const supabase = createClient(supabaseUrl, serviceKey)
@@ -65,7 +78,7 @@ async function processUnsubscribe(req: Request): Promise<Response> {
     .single()
 
   if (!queueItem) {
-    return htmlPage('Already unsubscribed', 'We could not find this email, but you will not receive further messages.', true)
+    return result(req, 'Already unsubscribed', 'We could not find this email, but you will not receive further messages.', true)
   }
 
   const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown'
@@ -82,7 +95,8 @@ async function processUnsubscribe(req: Request): Promise<Response> {
     user_agent: userAgent,
   })
 
-  return htmlPage(
+  return result(
+    req,
     'You have been unsubscribed',
     `We have removed <strong>${queueItem.to_email}</strong> from this sender's mailing list. You will not receive further emails from this campaign.`,
     true
