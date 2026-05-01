@@ -525,7 +525,7 @@ Deno.serve(async (req) => {
     // session below to respect provider per-session limits.
     const BATCH_SIZE = 200
     const MAX_ATTEMPTS = 3
-    const PER_SESSION_LIMIT = 20      // reconnect every N sends to avoid "mails per session" caps
+    const PER_SESSION_LIMIT = 15      // reconnect every N sends to avoid "mails per session" caps
     const INTER_SEND_DELAY_MS = 250   // small delay smooths bursts -> fewer 451 rate-limits
 
     const { data: pendingEmails, error: fetchError } = await supabase
