@@ -518,28 +518,28 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
-                  {/* Personal free mailbox (@gmail.com etc.) — DNS not applicable */}
+                  {/* Personal free mailbox (@gmail.com etc.) — provider handles DNS,
+                      but we still surface SPF/DMARC info so users on shared mailboxes
+                      understand what's being used on their behalf. */}
                   {selectedIsFreeProvider && isPersonalMailbox ? (
                     <Alert className="border-green-500/30 bg-green-500/5">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <AlertTitle>No DNS Setup Required</AlertTitle>
                       <AlertDescription>
-                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
+                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>. If you own a custom domain, add it as a separate identity to unlock SPF & DMARC controls.
                       </AlertDescription>
                     </Alert>
                   ) : (
                     <>
-                      {/* For custom domain identities (incl. those hosted on Google Workspace / M365),
-                          DKIM is only "required" when sending through our SES infrastructure. For
-                          identities that send through their own provider's SMTP, SPF + DMARC alone
-                          significantly improve deliverability. */}
+                      {/* For custom-domain identities, DKIM (a single DNS record) is
+                          enough to start sending. SPF & DMARC are optional inbox-boosters. */}
                       {!isFreeProviderCustomDomain && selectedIdentity.domain_status === 'unverified' && (
                         <Alert className="border-destructive/50 bg-destructive/10">
                           <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Action Required</AlertTitle>
+                          <AlertTitle>Action Required — verify DKIM</AlertTitle>
                           <AlertDescription>
-                            After adding DNS records, you must click "Verify Domain" below to complete verification.
-                            The domain will not be verified automatically.
+                            Add the DKIM CNAME record below and click "Verify DKIM" to start sending.
+                            SPF and DMARC are optional but strongly recommended for inbox delivery.
                           </AlertDescription>
                         </Alert>
                       )}
@@ -594,9 +594,9 @@ export default function SenderIdentities() {
                           <>
                             <Alert className="border-primary/30 bg-primary/5">
                               <Sparkles className="h-4 w-4 text-primary" />
-                              <AlertTitle>Boost Inbox Delivery with SPF & DMARC</AlertTitle>
+                              <AlertTitle>DKIM is enough to send — SPF & DMARC boost inbox delivery</AlertTitle>
                               <AlertDescription className="text-sm">
-                                Adding SPF and DMARC alongside DKIM is <strong>strongly recommended</strong> — Gmail and Yahoo now require all three for bulk senders. They're optional here, but emails without them are far more likely to land in spam.
+                                Your DKIM record alone is sufficient to start sending emails. <strong>SPF and DMARC are optional</strong>, but adding them dramatically improves deliverability — Gmail and Yahoo now require all three for bulk senders.
                               </AlertDescription>
                             </Alert>
 
@@ -646,7 +646,7 @@ export default function SenderIdentities() {
                               <div className="flex items-center justify-between flex-wrap gap-2">
                                 <h4 className="font-medium flex items-center gap-2">
                                   <Shield className="h-4 w-4 text-primary" />
-                                  2. SPF (TXT) <span className="text-xs text-muted-foreground font-normal">— recommended</span>
+                                  2. SPF (TXT) <span className="text-xs text-muted-foreground font-normal">— optional, boosts deliverability</span>
                                 </h4>
                                 <StatusBadge status={spfStatus} />
                               </div>
@@ -679,7 +679,7 @@ export default function SenderIdentities() {
                               <div className="flex items-center justify-between flex-wrap gap-2">
                                 <h4 className="font-medium flex items-center gap-2">
                                   <Shield className="h-4 w-4 text-primary" />
-                                  3. DMARC (TXT) <span className="text-xs text-muted-foreground font-normal">— recommended</span>
+                                  3. DMARC (TXT) <span className="text-xs text-muted-foreground font-normal">— optional, prevents spoofing</span>
                                 </h4>
                                 <StatusBadge status={dmarcStatus} />
                               </div>
