@@ -849,7 +849,6 @@ Deno.serve(async (req) => {
         }
       }
     }
-    }
 
     if (affectedCampaignIds.size > 0) {
       await updateCampaignStatuses(supabase, Array.from(affectedCampaignIds))
