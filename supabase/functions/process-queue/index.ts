@@ -156,48 +156,74 @@ class SmtpClient {
     const cleanFrom = from.match(/<(.+)>/)?.[1] || from
     const domain = cleanFrom.split('@')[1]
 
-    await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
-    const mailResp = await this.readResponse()
-    if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
+    try {
+      await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
+      const mailResp = await this.readResponse()
+      if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
 
-    await this.sendCommand(`RCPT TO:<${to}>`)
-    const rcptResp = await this.readResponse()
-    if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
+      await this.sendCommand(`RCPT TO:<${to}>`)
+      const rcptResp = await this.readResponse()
+      if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
 
-    await this.sendCommand(`DATA`)
-    const dataResp = await this.readResponse()
-    if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
+      await this.sendCommand(`DATA`)
+      const dataResp = await this.readResponse()
+      if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
 
-    const messageId = `<${crypto.randomUUID()}@${domain}>`
-    const date = new Date().toUTCString()
-    const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
+      const messageId = `<${crypto.randomUUID()}@${domain}>`
+      const date = new Date().toUTCString()
+      const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
 
-    const listUnsub = unsubscribeUrl
-      ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
-      : `<mailto:unsubscribe@${domain}>`
+      const listUnsub = unsubscribeUrl
+        ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
+        : `<mailto:unsubscribe@${domain}>`
 
-    const headers = [
-      `From: ${senderDisplay}`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      `Date: ${date}`,
-      `Message-ID: ${messageId}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=UTF-8`,
-      `Content-Transfer-Encoding: quoted-printable`,
-      `List-Unsubscribe: ${listUnsub}`,
-      ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
-      `X-Mailer: SteadyMail/1.0`,
-    ]
+      const headers = [
+        `From: ${senderDisplay}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        `Date: ${date}`,
+        `Message-ID: ${messageId}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/html; charset=UTF-8`,
+        `Content-Transfer-Encoding: quoted-printable`,
+        `List-Unsubscribe: ${listUnsub}`,
+        ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
+        `X-Mailer: SteadyMail/1.0`,
+      ]
 
-    const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
+      const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
 
-    const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
-    await this.sendCommand(emailContent)
-    const sendResp = await this.readResponse()
-    if (!sendResp.startsWith('250')) throw new Error(`Send failed: ${sendResp}`)
+      const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
+      await this.sendCommand(emailContent)
+      const sendResp = await this.readResponse()
+      if (!sendResp.startsWith('250')) throw new Error(`Send failed: ${sendResp}`)
 
-    return messageId
+      return messageId
+    } catch (err) {
+      // Try to reset the SMTP transaction so the next email can reuse the
+      // session. If RSET itself fails, the connection is unrecoverable —
+      // the caller will detect !isConnected() and reconnect.
+      await this.reset().catch(() => { this.forceClose() })
+      throw err
+    }
+  }
+
+  // RSET clears any in-progress mail transaction. Safe to call between sends.
+  async reset(): Promise<void> {
+    if (!this.conn) throw new Error('Not connected')
+    await this.sendCommand('RSET')
+    const resp = await this.readResponse()
+    if (!resp.startsWith('250')) {
+      // Connection is poisoned — drop it.
+      this.forceClose()
+      throw new Error(`RSET failed: ${resp}`)
+    }
+  }
+
+  forceClose(): void {
+    try { this.conn?.close() } catch { /* ignore */ }
+    this.conn = null
+    this.readBuf = ''
   }
 
   async close(): Promise<void> {
@@ -205,10 +231,7 @@ class SmtpClient {
       await this.sendCommand('QUIT')
       await this.readResponse()
     } catch { /* ignore */ }
-    try {
-      this.conn?.close()
-    } catch { /* ignore */ }
-    this.conn = null
+    this.forceClose()
   }
 
   private async sendCommand(cmd: string): Promise<void> {
@@ -216,24 +239,45 @@ class SmtpClient {
     await this.conn.write(this.encoder.encode(cmd + '\r\n'))
   }
 
+  // Read exactly ONE complete SMTP reply (handles multi-line "250-..." / "250 ...")
+  // and buffers any leftover bytes for the next call.
   private async readResponse(): Promise<string> {
     if (!this.conn) throw new Error('Not connected')
-    const buf = new Uint8Array(4096)
-    const n = await this.conn.read(buf)
-    if (n === null) throw new Error('Connection closed')
-    return this.decoder.decode(buf.subarray(0, n)).trim()
+
+    while (true) {
+      const complete = this.extractCompleteReply()
+      if (complete !== null) return complete
+
+      const buf = new Uint8Array(8192)
+      const n = await this.conn.read(buf)
+      if (n === null) throw new Error('Connection closed')
+      this.readBuf += this.decoder.decode(buf.subarray(0, n))
+    }
+  }
+
+  // A complete SMTP reply ends with a line that has a SPACE after the 3-digit code
+  // (e.g. "250 OK"). Lines with a "-" after the code (e.g. "250-AUTH ...") continue.
+  private extractCompleteReply(): string | null {
+    const lines: string[] = []
+    let cursor = 0
+    while (true) {
+      const nl = this.readBuf.indexOf('\n', cursor)
+      if (nl === -1) return null
+      const rawLine = this.readBuf.slice(cursor, nl).replace(/\r$/, '')
+      cursor = nl + 1
+      lines.push(rawLine)
+      // Done when this line is "XYZ ...." (space after code).
+      if (rawLine.length >= 4 && /^\d{3}\s/.test(rawLine)) {
+        const reply = lines.join('\n')
+        this.readBuf = this.readBuf.slice(cursor)
+        return reply
+      }
+      // Otherwise must be "XYZ-..." continuation; keep going.
+    }
   }
 
   private async readMultilineResponse(): Promise<string> {
-    let full = ''
-    while (true) {
-      const line = await this.readResponse()
-      full += line + '\n'
-      const lines = line.split('\n')
-      const lastLine = lines[lines.length - 1]
-      if (lastLine.length >= 4 && lastLine[3] === ' ') break
-    }
-    return full.trim()
+    return await this.readResponse()
   }
 }
 
