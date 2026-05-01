@@ -83,16 +83,16 @@ class SmtpClient {
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
-      await this.readResponse()
+      await this.readMultilineResponse()
     } else {
       const tcpConn = await Deno.connect({
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
       this.conn = tcpConn
-      await this.readResponse()
+      await this.readMultilineResponse()
 
-      await this.sendCommand(`EHLO localhost`)
+      await this.sendCommand(`EHLO ${this.ehloHost}`)
       await this.readMultilineResponse()
 
       await this.sendCommand(`STARTTLS`)
@@ -104,9 +104,11 @@ class SmtpClient {
       this.conn = await Deno.startTls(tcpConn, {
         hostname: config.smtp_host,
       })
+      // After STARTTLS the read buffer must be cleared.
+      this.readBuf = ''
     }
 
-    await this.sendCommand(`EHLO localhost`)
+    await this.sendCommand(`EHLO ${this.ehloHost}`)
     const ehloResp = await this.readMultilineResponse()
 
     const authLine = ehloResp.split('\n').find(l => l.toUpperCase().includes('AUTH'))
