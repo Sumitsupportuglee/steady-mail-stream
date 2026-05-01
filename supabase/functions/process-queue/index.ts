@@ -28,10 +28,32 @@ interface SmtpConfig {
 
 // --- SMTP CLIENT (Raw TCP for Deno) ---
 
+// Permanent recipient errors → suppress the address.
+// Anything 5xx on RCPT TO that we should NOT retry.
+export function isPermanentRecipientError(msg: string): boolean {
+  return /\b5\d{2}\b/.test(msg) && (
+    /no such user|user unknown|mailbox unavailable|invalid mailbox|address rejected|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
+    || /\b550\b|\b551\b|\b553\b|\b554\b/.test(msg)
+  )
+}
+
+// Auth failures — we should stop the whole batch for this account.
+export function isAuthError(msg: string): boolean {
+  return /\b535\b|authentication (credentials? )?(invalid|failed|rejected)|auth.*(failed|invalid)/i.test(msg)
+}
+
 class SmtpClient {
   private conn: Deno.TcpConn | Deno.TlsConn | null = null
   private encoder = new TextEncoder()
   private decoder = new TextDecoder()
+  private readBuf = ''
+  private ehloHost = 'mailer.local'
+
+  setEhloHost(host: string) {
+    if (host && /^[a-z0-9.-]+$/i.test(host)) this.ehloHost = host
+  }
+
+  isConnected(): boolean { return this.conn !== null }
 
   async connect(config: SmtpConfig, maxRetries = 3): Promise<void> {
     let lastError: Error | null = null
