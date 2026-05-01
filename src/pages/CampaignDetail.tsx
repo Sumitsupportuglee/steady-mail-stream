@@ -94,12 +94,19 @@ export default function CampaignDetail() {
         };
         setEmailStats(stats);
         
-        // Collect unique error messages
-        const errors = queueData
-          .filter(e => e.status === 'failed' && e.error_log)
-          .map(e => e.error_log as string);
-        const uniqueErrors = [...new Set(errors)];
-        setFailedErrors(uniqueErrors);
+        // Group identical errors with counts so the panel stays actionable
+        // even when hundreds of recipients hit the same SMTP problem.
+        const errorCounts = new Map<string, number>();
+        for (const e of queueData) {
+          if (e.status === 'failed' && e.error_log) {
+            const key = (e.error_log as string).trim();
+            errorCounts.set(key, (errorCounts.get(key) || 0) + 1);
+          }
+        }
+        const grouped = Array.from(errorCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([msg, count]) => (count > 1 ? `[${count}×] ${msg}` : msg));
+        setFailedErrors(grouped);
       }
 
       // Fetch tracking stats
