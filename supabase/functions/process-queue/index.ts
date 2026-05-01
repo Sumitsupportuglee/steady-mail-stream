@@ -28,10 +28,32 @@ interface SmtpConfig {
 
 // --- SMTP CLIENT (Raw TCP for Deno) ---
 
+// Permanent recipient errors → suppress the address.
+// Anything 5xx on RCPT TO that we should NOT retry.
+export function isPermanentRecipientError(msg: string): boolean {
+  return /\b5\d{2}\b/.test(msg) && (
+    /no such user|user unknown|mailbox unavailable|invalid mailbox|address rejected|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
+    || /\b550\b|\b551\b|\b553\b|\b554\b/.test(msg)
+  )
+}
+
+// Auth failures — we should stop the whole batch for this account.
+export function isAuthError(msg: string): boolean {
+  return /\b535\b|authentication (credentials? )?(invalid|failed|rejected)|auth.*(failed|invalid)/i.test(msg)
+}
+
 class SmtpClient {
   private conn: Deno.TcpConn | Deno.TlsConn | null = null
   private encoder = new TextEncoder()
   private decoder = new TextDecoder()
+  private readBuf = ''
+  private ehloHost = 'mailer.local'
+
+  setEhloHost(host: string) {
+    if (host && /^[a-z0-9.-]+$/i.test(host)) this.ehloHost = host
+  }
+
+  isConnected(): boolean { return this.conn !== null }
 
   async connect(config: SmtpConfig, maxRetries = 3): Promise<void> {
     let lastError: Error | null = null
@@ -61,16 +83,16 @@ class SmtpClient {
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
-      await this.readResponse()
+      await this.readMultilineResponse()
     } else {
       const tcpConn = await Deno.connect({
         hostname: config.smtp_host,
         port: config.smtp_port,
       })
       this.conn = tcpConn
-      await this.readResponse()
+      await this.readMultilineResponse()
 
-      await this.sendCommand(`EHLO localhost`)
+      await this.sendCommand(`EHLO ${this.ehloHost}`)
       await this.readMultilineResponse()
 
       await this.sendCommand(`STARTTLS`)
@@ -82,9 +104,11 @@ class SmtpClient {
       this.conn = await Deno.startTls(tcpConn, {
         hostname: config.smtp_host,
       })
+      // After STARTTLS the read buffer must be cleared.
+      this.readBuf = ''
     }
 
-    await this.sendCommand(`EHLO localhost`)
+    await this.sendCommand(`EHLO ${this.ehloHost}`)
     const ehloResp = await this.readMultilineResponse()
 
     const authLine = ehloResp.split('\n').find(l => l.toUpperCase().includes('AUTH'))
@@ -132,48 +156,74 @@ class SmtpClient {
     const cleanFrom = from.match(/<(.+)>/)?.[1] || from
     const domain = cleanFrom.split('@')[1]
 
-    await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
-    const mailResp = await this.readResponse()
-    if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
+    try {
+      await this.sendCommand(`MAIL FROM:<${cleanFrom}>`)
+      const mailResp = await this.readResponse()
+      if (!mailResp.startsWith('250')) throw new Error(`MAIL FROM failed: ${mailResp}`)
 
-    await this.sendCommand(`RCPT TO:<${to}>`)
-    const rcptResp = await this.readResponse()
-    if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
+      await this.sendCommand(`RCPT TO:<${to}>`)
+      const rcptResp = await this.readResponse()
+      if (!rcptResp.startsWith('250')) throw new Error(`RCPT TO failed: ${rcptResp}`)
 
-    await this.sendCommand(`DATA`)
-    const dataResp = await this.readResponse()
-    if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
+      await this.sendCommand(`DATA`)
+      const dataResp = await this.readResponse()
+      if (!dataResp.startsWith('354')) throw new Error(`DATA failed: ${dataResp}`)
 
-    const messageId = `<${crypto.randomUUID()}@${domain}>`
-    const date = new Date().toUTCString()
-    const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
+      const messageId = `<${crypto.randomUUID()}@${domain}>`
+      const date = new Date().toUTCString()
+      const senderDisplay = fromName ? `${fromName} <${cleanFrom}>` : cleanFrom
 
-    const listUnsub = unsubscribeUrl
-      ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
-      : `<mailto:unsubscribe@${domain}>`
+      const listUnsub = unsubscribeUrl
+        ? `<${unsubscribeUrl}>, <mailto:unsubscribe@${domain}>`
+        : `<mailto:unsubscribe@${domain}>`
 
-    const headers = [
-      `From: ${senderDisplay}`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      `Date: ${date}`,
-      `Message-ID: ${messageId}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=UTF-8`,
-      `Content-Transfer-Encoding: quoted-printable`,
-      `List-Unsubscribe: ${listUnsub}`,
-      ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
-      `X-Mailer: SteadyMail/1.0`,
-    ]
+      const headers = [
+        `From: ${senderDisplay}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        `Date: ${date}`,
+        `Message-ID: ${messageId}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/html; charset=UTF-8`,
+        `Content-Transfer-Encoding: quoted-printable`,
+        `List-Unsubscribe: ${listUnsub}`,
+        ...(unsubscribeUrl ? [`List-Unsubscribe-Post: List-Unsubscribe=One-Click`] : []),
+        `X-Mailer: SteadyMail/1.0`,
+      ]
 
-    const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
+      const qpBody = dotStuff(encodeQuotedPrintable(htmlBody))
 
-    const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
-    await this.sendCommand(emailContent)
-    const sendResp = await this.readResponse()
-    if (!sendResp.startsWith('250')) throw new Error(`Send failed: ${sendResp}`)
+      const emailContent = headers.join('\r\n') + '\r\n\r\n' + qpBody + '\r\n.'
+      await this.sendCommand(emailContent)
+      const sendResp = await this.readResponse()
+      if (!sendResp.startsWith('250')) throw new Error(`Send failed: ${sendResp}`)
 
-    return messageId
+      return messageId
+    } catch (err) {
+      // Try to reset the SMTP transaction so the next email can reuse the
+      // session. If RSET itself fails, the connection is unrecoverable —
+      // the caller will detect !isConnected() and reconnect.
+      await this.reset().catch(() => { this.forceClose() })
+      throw err
+    }
+  }
+
+  // RSET clears any in-progress mail transaction. Safe to call between sends.
+  async reset(): Promise<void> {
+    if (!this.conn) throw new Error('Not connected')
+    await this.sendCommand('RSET')
+    const resp = await this.readResponse()
+    if (!resp.startsWith('250')) {
+      // Connection is poisoned — drop it.
+      this.forceClose()
+      throw new Error(`RSET failed: ${resp}`)
+    }
+  }
+
+  forceClose(): void {
+    try { this.conn?.close() } catch { /* ignore */ }
+    this.conn = null
+    this.readBuf = ''
   }
 
   async close(): Promise<void> {
@@ -181,10 +231,7 @@ class SmtpClient {
       await this.sendCommand('QUIT')
       await this.readResponse()
     } catch { /* ignore */ }
-    try {
-      this.conn?.close()
-    } catch { /* ignore */ }
-    this.conn = null
+    this.forceClose()
   }
 
   private async sendCommand(cmd: string): Promise<void> {
@@ -192,24 +239,45 @@ class SmtpClient {
     await this.conn.write(this.encoder.encode(cmd + '\r\n'))
   }
 
+  // Read exactly ONE complete SMTP reply (handles multi-line "250-..." / "250 ...")
+  // and buffers any leftover bytes for the next call.
   private async readResponse(): Promise<string> {
     if (!this.conn) throw new Error('Not connected')
-    const buf = new Uint8Array(4096)
-    const n = await this.conn.read(buf)
-    if (n === null) throw new Error('Connection closed')
-    return this.decoder.decode(buf.subarray(0, n)).trim()
+
+    while (true) {
+      const complete = this.extractCompleteReply()
+      if (complete !== null) return complete
+
+      const buf = new Uint8Array(8192)
+      const n = await this.conn.read(buf)
+      if (n === null) throw new Error('Connection closed')
+      this.readBuf += this.decoder.decode(buf.subarray(0, n))
+    }
+  }
+
+  // A complete SMTP reply ends with a line that has a SPACE after the 3-digit code
+  // (e.g. "250 OK"). Lines with a "-" after the code (e.g. "250-AUTH ...") continue.
+  private extractCompleteReply(): string | null {
+    const lines: string[] = []
+    let cursor = 0
+    while (true) {
+      const nl = this.readBuf.indexOf('\n', cursor)
+      if (nl === -1) return null
+      const rawLine = this.readBuf.slice(cursor, nl).replace(/\r$/, '')
+      cursor = nl + 1
+      lines.push(rawLine)
+      // Done when this line is "XYZ ...." (space after code).
+      if (rawLine.length >= 4 && /^\d{3}\s/.test(rawLine)) {
+        const reply = lines.join('\n')
+        this.readBuf = this.readBuf.slice(cursor)
+        return reply
+      }
+      // Otherwise must be "XYZ-..." continuation; keep going.
+    }
   }
 
   private async readMultilineResponse(): Promise<string> {
-    let full = ''
-    while (true) {
-      const line = await this.readResponse()
-      full += line + '\n'
-      const lines = line.split('\n')
-      const lastLine = lines[lines.length - 1]
-      if (lastLine.length >= 4 && lastLine[3] === ' ') break
-    }
-    return full.trim()
+    return await this.readResponse()
   }
 }
 
@@ -457,7 +525,7 @@ Deno.serve(async (req) => {
     // session below to respect provider per-session limits.
     const BATCH_SIZE = 200
     const MAX_ATTEMPTS = 3
-    const PER_SESSION_LIMIT = 20      // reconnect every N sends to avoid "mails per session" caps
+    const PER_SESSION_LIMIT = 15      // reconnect every N sends to avoid "mails per session" caps
     const INTER_SEND_DELAY_MS = 250   // small delay smooths bursts -> fewer 451 rate-limits
 
     const { data: pendingEmails, error: fetchError } = await supabase
@@ -518,12 +586,23 @@ Deno.serve(async (req) => {
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
 
+      // Track addresses we've already auto-suppressed in this run so we
+      // skip duplicates without re-querying.
+      const suppressedThisRun = new Set<string>()
+      // If auth fails for this account we abort all chunks for it.
+      let accountAuthFailed: string | null = null
+
       // Chunk emails into per-session sub-batches: a fresh SMTP connection
       // is opened for each chunk so providers don't trip "mails per session"
       // limits (451-Mails per session limit exceeded).
       for (let i = 0; i < emails.length; i += PER_SESSION_LIMIT) {
+        if (accountAuthFailed) break
         const chunk = emails.slice(i, i + PER_SESSION_LIMIT)
-        const client = new SmtpClient()
+        let client = new SmtpClient()
+        // Use the sender's domain as EHLO hostname — many providers
+        // reject or penalise "EHLO localhost".
+        const fromDomain = (chunk[0].from_email.match(/<(.+)>/)?.[1] || chunk[0].from_email).split('@')[1]
+        if (fromDomain) client.setEhloHost(fromDomain)
         let connected = false
 
         try {
@@ -532,8 +611,28 @@ Deno.serve(async (req) => {
         } catch (connErr: unknown) {
           const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
           console.error(`SMTP connect failed: ${errMsg}`)
-          // Connection issues are usually transient -> keep emails pending so
-          // the next cron tick retries them, until MAX_ATTEMPTS is reached.
+
+          // 535 auth error → stop hammering this account, mark all its emails failed
+          // with a clear, user-actionable message.
+          if (isAuthError(errMsg)) {
+            accountAuthFailed = errMsg
+            const friendly = 'SMTP login rejected (535). Please update the SMTP password in Settings → SMTP Accounts.'
+            for (const email of emails) {
+              if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+              await supabase
+                .from('email_queue')
+                .update({
+                  status: 'failed',
+                  attempt_count: (email.attempt_count || 0) + 1,
+                  error_log: friendly,
+                })
+                .eq('id', email.id)
+              errorCount++
+            }
+            break
+          }
+
+          // Other connection issues: keep emails pending so the next cron tick retries.
           for (const email of chunk) {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
             const newAttempt = (email.attempt_count || 0) + 1
@@ -555,7 +654,35 @@ Deno.serve(async (req) => {
           for (const email of chunk) {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
+            // If a previous send dropped the session, reconnect before continuing.
+            if (!client.isConnected()) {
+              try {
+                client = new SmtpClient()
+                if (fromDomain) client.setEhloHost(fromDomain)
+                await client.connect(smtpConfig)
+              } catch (reErr: unknown) {
+                const errMsg = reErr instanceof Error ? reErr.message : 'reconnect failed'
+                console.warn(`SMTP reconnect failed: ${errMsg} — deferring rest of chunk`)
+                // Leave remaining emails as pending for next tick
+                break
+              }
+            }
+
             try {
+              // Local + db-backed suppression check
+              if (suppressedThisRun.has(email.to_email.toLowerCase())) {
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    error_log: 'Recipient auto-suppressed (previous bounce)',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
               // Suppression: skip recipients who unsubscribed from this user's mail
               const { data: optedOut } = await supabase
                 .from('email_unsubscribes')
@@ -633,8 +760,58 @@ Deno.serve(async (req) => {
               const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
               console.error(`Failed to send to ${email.to_email}: ${errMsg}`)
 
-              // Classify transient vs permanent SMTP errors. 4xx replies and
-              // common rate-limit phrases -> retry next tick. 5xx -> give up.
+              // 1) Auth error mid-session → stop everything for this account
+              if (isAuthError(errMsg)) {
+                accountAuthFailed = errMsg
+                const friendly = 'SMTP login rejected (535). Please update the SMTP password in Settings → SMTP Accounts.'
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: friendly,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                break
+              }
+
+              // 2) Permanent recipient bounce → auto-suppress this address.
+              const isPermRcpt = /RCPT TO failed/i.test(errMsg) && isPermanentRecipientError(errMsg)
+              if (isPermRcpt) {
+                suppressedThisRun.add(email.to_email.toLowerCase())
+                try {
+                  await supabase.from('email_unsubscribes').insert({
+                    user_id: email.user_id,
+                    email: email.to_email,
+                    contact_id: (email as any).contact_id ?? null,
+                    campaign_id: email.campaign_id ?? null,
+                    email_queue_id: email.id,
+                    reason: `auto-bounce: ${errMsg.slice(0, 200)}`,
+                  })
+                } catch (_) { /* ignore duplicate */ }
+                // Mark contact as bounced so it disappears from active lists
+                try {
+                  await supabase
+                    .from('contacts')
+                    .update({ status: 'bounced' })
+                    .eq('user_id', email.user_id)
+                    .ilike('email', email.to_email)
+                } catch (_) { /* ignore */ }
+
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: `Permanent bounce — address suppressed: ${errMsg}`,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
+              // 3) Transient vs permanent classification
               const isTransient =
                 /\b4\d{2}\b/.test(errMsg) ||
                 /try again later/i.test(errMsg) ||
@@ -657,20 +834,21 @@ Deno.serve(async (req) => {
               if (giveUp) {
                 errorCount++
               } else {
-                // Per-session limit hit -> stop using this connection;
-                // remaining emails in this chunk will go in the next session.
-                if (/mails per session|503 Bad sequence/i.test(errMsg)) {
-                  break
+                // Per-session / sequence problems → drop the connection so
+                // we open a fresh one for remaining emails in this chunk.
+                if (/mails per session|503 Bad sequence|421/i.test(errMsg)) {
+                  client.forceClose()
                 }
               }
             }
           }
         } finally {
-          if (connected) {
+          if (connected && client.isConnected()) {
             try { await client.close() } catch { /* ignore */ }
           }
         }
       }
+    }
     }
 
     if (affectedCampaignIds.size > 0) {

@@ -151,9 +151,24 @@ export default function CampaignWizard() {
       const identity = identities.find(i => i.id === selectedIdentity);
       if (!identity) throw new Error('No sender identity selected');
 
-      const recipients = audienceType === 'all' 
+      const allRecipients = audienceType === 'all' 
         ? contacts 
         : contacts.filter(c => selectedContacts.has(c.id));
+
+      // Filter out obviously invalid email formats — they would just bounce
+      // with 550/553 and waste sending quota / reputation.
+      const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      const recipients = allRecipients.filter(c => EMAIL_RX.test(c.email.trim()));
+      const skipped = allRecipients.length - recipients.length;
+      if (skipped > 0) {
+        toast({
+          title: `Skipped ${skipped} invalid address${skipped === 1 ? '' : 'es'}`,
+          description: 'These contacts had malformed emails and were excluded.',
+        });
+      }
+      if (recipients.length === 0) {
+        throw new Error('No valid recipients after filtering');
+      }
 
       // Create campaign
       const { data: campaign, error: campaignError } = await supabase

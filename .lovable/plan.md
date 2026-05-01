@@ -1,63 +1,55 @@
-# Add SPF & DMARC Authentication (Optional, Recommended)
+# Fix Bulk Email Delivery Failures
 
-## Why this matters
+## Diagnosis of the 4 errors in your screenshot
 
-Mailbox providers (Gmail, Outlook, Yahoo) use three records to authenticate a sender:
+| Error | Root cause | Fix category |
+|---|---|---|
+| `MAIL FROM failed: 503 Bad sequence of commands` | After a previous recipient failed (RCPT/DATA error), we go straight into the next email's `MAIL FROM` without sending `RSET`. The server is still mid-transaction → 503. Also our `readResponse()` reads a single 4 KB chunk, so a stray banner/late line from a prior command can leak into the next read and look like a "bad sequence". | SMTP protocol bug |
+| `SMTP connection error: AUTH PLAIN failed: 535 Authentication credentials invalid` | The user's stored SMTP password is wrong / expired / app-password revoked. There's no fallback to `AUTH LOGIN` and no friendly signal back to the user. | User config + UX |
+| `RCPT TO failed: 550 ... invalid DNS MX or A/AAAA resource record` (×2) | The recipient address belongs to a domain with no MX. We send to it, get a hard bounce, and then keep trying it (and the *next* sends fail with 503 because the session is poisoned — see row 1). | Address hygiene + auto-suppression |
 
-- **DKIM** (already implemented) — cryptographically signs the email
-- **SPF** — declares which servers are allowed to send for your domain
-- **DMARC** — tells receivers what to do if SPF/DKIM fail
+So the headline issue is: **one bad recipient corrupts the SMTP session, and every subsequent email in that session fails with 503**. This is why you see 98 failures — most are collateral damage, not 98 independently broken emails.
 
-Adding all three typically lifts inbox placement by 20–40% and is **required** by Gmail/Yahoo's 2024 bulk-sender rules. Missing SPF/DMARC is the #1 reason cold-outreach emails land in spam.
+## What we will change
 
-## What changes (custom-domain identities only)
+### 1. `supabase/functions/process-queue/index.ts` — SMTP session hardening
+- **Send `RSET` after every failed `MAIL FROM` / `RCPT TO` / `DATA`**, before moving to the next email. This clears the transaction and eliminates the cascading `503 Bad sequence of commands`.
+- **Reconnect the session if `RSET` itself fails** or if we see `503` / `421` — the connection is unrecoverable, open a fresh one for the rest of the chunk.
+- **Fix `readResponse()`** to read full multi-line SMTP replies properly (loop until the line with `XYZ ` space-separator, drain the socket between commands). Today a single `read()` can return a partial frame, which intermittently presents as 503 on the next command.
+- **Use a real hostname in `EHLO`** instead of `EHLO localhost`. Some providers (Hostinger, Zoho, Outlook) penalise or reject `localhost`. We'll use the sender's domain (from `from_email`).
+- **Lower `PER_SESSION_LIMIT`** from 20 → 15 and add a clean `RSET` between sends even on success, which most providers prefer in long sessions.
 
-Free providers (Gmail / Yahoo / Outlook) keep working exactly as today — no DNS UI, auto-verified.
+### 2. Auto-suppress permanently bad recipients
+- When we get a **5xx on RCPT TO** (e.g. `550 invalid DNS MX`, `550 mailbox unavailable`, `550 user unknown`, `553 ...`), insert the address into `email_unsubscribes` (or a new `bounced_emails` reason) and mark the contact `status = 'bounced'` in `contacts`. Future campaigns will skip them automatically (the queue already checks `email_unsubscribes`).
+- This stops the same dead address from burning attempts on every campaign and protects sender reputation.
 
-For **"Other (Custom Domain)"** identities, the DNS Configuration panel will show **three sections** instead of one:
+### 3. Pre-flight recipient validation (cheap, optional but big win)
+- Before queueing a campaign in `CampaignWizard.tsx`, run a lightweight syntactic + MX check on contacts and warn the user. Either:
+  - **(default)** Just validate the email format strictly and skip obviously broken ones, OR
+  - Add an admin-triggered "Verify list" button in `Contacts.tsx` that runs an Edge Function doing DNS MX lookups (via DNS-over-HTTPS — same pattern already used for domain verification) and marks bad contacts as `bounced`.
 
-1. **DKIM (CNAME)** — required, already exists
-2. **SPF (TXT)** — recommended, optional
-3. **DMARC (TXT)** — recommended, optional
+We'll go with (1) auto-suppression on bounce + strict format check at queue time. List-wide MX verification can be a follow-up if you want.
 
-Each section gets its own status badge (Verified / Not Set), copy buttons, and individual "Verify" button. The user can skip SPF/DMARC and still send — only DKIM is required to enable sending. A friendly banner explains the deliverability benefit.
+### 4. Auth failure → clear user-facing signal
+- When `AUTH PLAIN/LOGIN` returns `535`, mark **all** queued emails for that SMTP account as `failed` with a single, human-readable message: *"SMTP login rejected (535). Update your SMTP password in Settings → SMTP Accounts."*
+- Surface a banner on the Dashboard and Campaigns page when any of the user's SMTP accounts has a recent `535` so the user knows immediately and re-enters credentials.
 
-### Records that will be shown
+### 5. Better error analytics on the failed-deliveries panel
+- Group identical errors and show counts (e.g. "550 invalid DNS MX × 47") instead of repeating the same line — makes the actual problem obvious at a glance.
+- Add a tiny "Why?" tooltip per error type explaining the cause and the fix.
 
-```text
-SPF   Host: @          Value: v=spf1 include:amazonses.com ~all
-DMARC Host: _dmarc     Value: v=DMARC1; p=none; rua=mailto:dmarc@<domain>; pct=100; aspf=r; adkim=r
-```
+## Files to change
 
-DMARC starts at `p=none` (monitor-only) — the safe default that won't break legitimate mail. We'll mention in the UI that they can tighten to `quarantine` or `reject` later once they're confident.
+- `supabase/functions/process-queue/index.ts` — SMTP client (`RSET`, EHLO hostname, response reader, auto-suppress on 5xx RCPT, classify 535 distinctly)
+- `src/pages/CampaignWizard.tsx` — strict email format validation before insert
+- `src/pages/Campaigns.tsx` (or wherever the "Failed Deliveries" card lives — will locate during implementation) — group/count errors, add tooltips, add 535-banner
+- Possibly a small migration to add a `bounce_reason` column to `email_unsubscribes` (or use existing `reason` field if present) so auto-suppressed addresses are distinguishable from user-initiated unsubscribes
 
-## Technical changes
+## What you should expect after the fix
 
-**Database migration** — add to `sender_identities`:
-- `spf_status text default 'not_set'` ('not_set' | 'verified' | 'failed')
-- `dmarc_status text default 'not_set'`
-- `spf_verified_at timestamptz`
-- `dmarc_verified_at timestamptz`
+- The cascading **503** errors disappear → success rate on large sends jumps significantly even before any list cleaning.
+- Repeat sends to the same dead address stop after the first bounce.
+- A `535` on one account no longer silently retries 98 times — you see one clear "fix your password" message.
+- Failed-deliveries panel becomes actionable: you see *what* failed and *why*, grouped.
 
-**Edge function `verify-domain`** — extend to accept `record_type: 'dkim' | 'spf' | 'dmarc'`:
-- DKIM: existing CNAME check (unchanged)
-- SPF: DoH TXT query on root domain, look for `v=spf1` containing `amazonses.com` (or `include:` directive)
-- DMARC: DoH TXT query on `_dmarc.<domain>`, look for `v=DMARC1`
-- Update the matching `*_status` column
-
-**Frontend `src/pages/SenderIdentities.tsx`**:
-- Replace the single CNAME card with a 3-record layout (DKIM / SPF / DMARC), each with Host + Value + Copy + Verify button + status badge
-- Add an "Optional but recommended" banner explaining the deliverability lift
-- Update the help accordion with a new "Why SPF & DMARC?" section
-- Update `SenderIdentity` interface and `fetchIdentities` to read new columns
-
-**No changes** to:
-- `process-queue` (sending logic) — DKIM remains the only hard requirement
-- Free-provider flow (Gmail/Yahoo/Outlook)
-- Existing identities — they continue working; SPF/DMARC just show as "Not Set" until the user opts in
-
-## Files touched
-
-- `supabase/migrations/<new>_add_spf_dmarc_columns.sql` (new)
-- `supabase/functions/verify-domain/index.ts` (extend with SPF + DMARC checks)
-- `src/pages/SenderIdentities.tsx` (UI for 3 records)
+Approve this plan and I'll implement it.
