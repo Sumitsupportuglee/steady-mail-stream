@@ -594,9 +594,9 @@ export default function SenderIdentities() {
                           <>
                             <Alert className="border-primary/30 bg-primary/5">
                               <Sparkles className="h-4 w-4 text-primary" />
-                              <AlertTitle>Boost Inbox Delivery with SPF & DMARC</AlertTitle>
+                              <AlertTitle>DKIM is enough to send — SPF & DMARC boost inbox delivery</AlertTitle>
                               <AlertDescription className="text-sm">
-                                Adding SPF and DMARC alongside DKIM is <strong>strongly recommended</strong> — Gmail and Yahoo now require all three for bulk senders. They're optional here, but emails without them are far more likely to land in spam.
+                                Your DKIM record alone is sufficient to start sending emails. <strong>SPF and DMARC are optional</strong>, but adding them dramatically improves deliverability — Gmail and Yahoo now require all three for bulk senders.
                               </AlertDescription>
                             </Alert>
 
