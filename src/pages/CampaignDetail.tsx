@@ -285,6 +285,15 @@ export default function CampaignDetail() {
             </CardHeader>
             {failedErrors.length > 0 && (
               <CardContent>
+                <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p className="font-semibold mb-1">Common causes:</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li><b>535 Authentication credentials invalid</b> — your SMTP password is wrong or expired. Update it in Settings → SMTP Accounts.</li>
+                    <li><b>550 invalid DNS MX / mailbox unavailable</b> — the recipient address is dead. We auto-suppress these so you won't email them again.</li>
+                    <li><b>503 Bad sequence of commands</b> — server-side hiccup; affected emails are automatically retried.</li>
+                    <li><b>451 / 421 mails per session</b> — provider rate-limit. We back off and retry on the next cycle.</li>
+                  </ul>
+                </div>
                 <div className="space-y-2">
                   {failedErrors.map((err, i) => (
                     <div key={i} className="text-sm text-destructive bg-destructive/10 rounded p-3 font-mono break-all">
