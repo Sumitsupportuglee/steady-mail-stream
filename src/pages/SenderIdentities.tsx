@@ -679,7 +679,7 @@ export default function SenderIdentities() {
                               <div className="flex items-center justify-between flex-wrap gap-2">
                                 <h4 className="font-medium flex items-center gap-2">
                                   <Shield className="h-4 w-4 text-primary" />
-                                  3. DMARC (TXT) <span className="text-xs text-muted-foreground font-normal">— recommended</span>
+                                  3. DMARC (TXT) <span className="text-xs text-muted-foreground font-normal">— optional, prevents spoofing</span>
                                 </h4>
                                 <StatusBadge status={dmarcStatus} />
                               </div>
