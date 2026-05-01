@@ -586,12 +586,23 @@ Deno.serve(async (req) => {
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
 
+      // Track addresses we've already auto-suppressed in this run so we
+      // skip duplicates without re-querying.
+      const suppressedThisRun = new Set<string>()
+      // If auth fails for this account we abort all chunks for it.
+      let accountAuthFailed: string | null = null
+
       // Chunk emails into per-session sub-batches: a fresh SMTP connection
       // is opened for each chunk so providers don't trip "mails per session"
       // limits (451-Mails per session limit exceeded).
       for (let i = 0; i < emails.length; i += PER_SESSION_LIMIT) {
+        if (accountAuthFailed) break
         const chunk = emails.slice(i, i + PER_SESSION_LIMIT)
-        const client = new SmtpClient()
+        let client = new SmtpClient()
+        // Use the sender's domain as EHLO hostname — many providers
+        // reject or penalise "EHLO localhost".
+        const fromDomain = (chunk[0].from_email.match(/<(.+)>/)?.[1] || chunk[0].from_email).split('@')[1]
+        if (fromDomain) client.setEhloHost(fromDomain)
         let connected = false
 
         try {
@@ -600,8 +611,28 @@ Deno.serve(async (req) => {
         } catch (connErr: unknown) {
           const errMsg = connErr instanceof Error ? connErr.message : 'SMTP connection failed'
           console.error(`SMTP connect failed: ${errMsg}`)
-          // Connection issues are usually transient -> keep emails pending so
-          // the next cron tick retries them, until MAX_ATTEMPTS is reached.
+
+          // 535 auth error → stop hammering this account, mark all its emails failed
+          // with a clear, user-actionable message.
+          if (isAuthError(errMsg)) {
+            accountAuthFailed = errMsg
+            const friendly = 'SMTP login rejected (535). Please update the SMTP password in Settings → SMTP Accounts.'
+            for (const email of emails) {
+              if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
+              await supabase
+                .from('email_queue')
+                .update({
+                  status: 'failed',
+                  attempt_count: (email.attempt_count || 0) + 1,
+                  error_log: friendly,
+                })
+                .eq('id', email.id)
+              errorCount++
+            }
+            break
+          }
+
+          // Other connection issues: keep emails pending so the next cron tick retries.
           for (const email of chunk) {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
             const newAttempt = (email.attempt_count || 0) + 1
@@ -623,7 +654,35 @@ Deno.serve(async (req) => {
           for (const email of chunk) {
             if (email.campaign_id) affectedCampaignIds.add(email.campaign_id)
 
+            // If a previous send dropped the session, reconnect before continuing.
+            if (!client.isConnected()) {
+              try {
+                client = new SmtpClient()
+                if (fromDomain) client.setEhloHost(fromDomain)
+                await client.connect(smtpConfig)
+              } catch (reErr: unknown) {
+                const errMsg = reErr instanceof Error ? reErr.message : 'reconnect failed'
+                console.warn(`SMTP reconnect failed: ${errMsg} — deferring rest of chunk`)
+                // Leave remaining emails as pending for next tick
+                break
+              }
+            }
+
             try {
+              // Local + db-backed suppression check
+              if (suppressedThisRun.has(email.to_email.toLowerCase())) {
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    error_log: 'Recipient auto-suppressed (previous bounce)',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
               // Suppression: skip recipients who unsubscribed from this user's mail
               const { data: optedOut } = await supabase
                 .from('email_unsubscribes')
@@ -701,8 +760,58 @@ Deno.serve(async (req) => {
               const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
               console.error(`Failed to send to ${email.to_email}: ${errMsg}`)
 
-              // Classify transient vs permanent SMTP errors. 4xx replies and
-              // common rate-limit phrases -> retry next tick. 5xx -> give up.
+              // 1) Auth error mid-session → stop everything for this account
+              if (isAuthError(errMsg)) {
+                accountAuthFailed = errMsg
+                const friendly = 'SMTP login rejected (535). Please update the SMTP password in Settings → SMTP Accounts.'
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: friendly,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                break
+              }
+
+              // 2) Permanent recipient bounce → auto-suppress this address.
+              const isPermRcpt = /RCPT TO failed/i.test(errMsg) && isPermanentRecipientError(errMsg)
+              if (isPermRcpt) {
+                suppressedThisRun.add(email.to_email.toLowerCase())
+                try {
+                  await supabase.from('email_unsubscribes').insert({
+                    user_id: email.user_id,
+                    email: email.to_email,
+                    contact_id: (email as any).contact_id ?? null,
+                    campaign_id: email.campaign_id ?? null,
+                    email_queue_id: email.id,
+                    reason: `auto-bounce: ${errMsg.slice(0, 200)}`,
+                  })
+                } catch (_) { /* ignore duplicate */ }
+                // Mark contact as bounced so it disappears from active lists
+                try {
+                  await supabase
+                    .from('contacts')
+                    .update({ status: 'bounced' })
+                    .eq('user_id', email.user_id)
+                    .ilike('email', email.to_email)
+                } catch (_) { /* ignore */ }
+
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: `Permanent bounce — address suppressed: ${errMsg}`,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
+              // 3) Transient vs permanent classification
               const isTransient =
                 /\b4\d{2}\b/.test(errMsg) ||
                 /try again later/i.test(errMsg) ||
@@ -725,20 +834,21 @@ Deno.serve(async (req) => {
               if (giveUp) {
                 errorCount++
               } else {
-                // Per-session limit hit -> stop using this connection;
-                // remaining emails in this chunk will go in the next session.
-                if (/mails per session|503 Bad sequence/i.test(errMsg)) {
-                  break
+                // Per-session / sequence problems → drop the connection so
+                // we open a fresh one for remaining emails in this chunk.
+                if (/mails per session|503 Bad sequence|421/i.test(errMsg)) {
+                  client.forceClose()
                 }
               }
             }
           }
         } finally {
-          if (connected) {
+          if (connected && client.isConnected()) {
             try { await client.close() } catch { /* ignore */ }
           }
         }
       }
+    }
     }
 
     if (affectedCampaignIds.size > 0) {
