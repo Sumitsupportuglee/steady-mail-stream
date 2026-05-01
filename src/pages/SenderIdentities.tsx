@@ -518,28 +518,28 @@ export default function SenderIdentities() {
             <CardContent>
               {selectedIdentity ? (
                 <div className="space-y-4">
-                  {/* Personal free mailbox (@gmail.com etc.) — DNS not applicable */}
+                  {/* Personal free mailbox (@gmail.com etc.) — provider handles DNS,
+                      but we still surface SPF/DMARC info so users on shared mailboxes
+                      understand what's being used on their behalf. */}
                   {selectedIsFreeProvider && isPersonalMailbox ? (
                     <Alert className="border-green-500/30 bg-green-500/5">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                       <AlertTitle>No DNS Setup Required</AlertTitle>
                       <AlertDescription>
-                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>.
+                        Personal <span className="capitalize">{selectedIdentity.email_provider}</span> mailboxes don't require DNS verification — your provider already publishes SPF, DKIM and DMARC for you. Just make sure your SMTP credentials are configured in <strong>Settings</strong>. If you own a custom domain, add it as a separate identity to unlock SPF & DMARC controls.
                       </AlertDescription>
                     </Alert>
                   ) : (
                     <>
-                      {/* For custom domain identities (incl. those hosted on Google Workspace / M365),
-                          DKIM is only "required" when sending through our SES infrastructure. For
-                          identities that send through their own provider's SMTP, SPF + DMARC alone
-                          significantly improve deliverability. */}
+                      {/* For custom-domain identities, DKIM (a single DNS record) is
+                          enough to start sending. SPF & DMARC are optional inbox-boosters. */}
                       {!isFreeProviderCustomDomain && selectedIdentity.domain_status === 'unverified' && (
                         <Alert className="border-destructive/50 bg-destructive/10">
                           <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Action Required</AlertTitle>
+                          <AlertTitle>Action Required — verify DKIM</AlertTitle>
                           <AlertDescription>
-                            After adding DNS records, you must click "Verify Domain" below to complete verification.
-                            The domain will not be verified automatically.
+                            Add the DKIM CNAME record below and click "Verify DKIM" to start sending.
+                            SPF and DMARC are optional but strongly recommended for inbox delivery.
                           </AlertDescription>
                         </Alert>
                       )}
