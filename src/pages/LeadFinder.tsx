@@ -88,6 +88,22 @@ export default function LeadFinder() {
   const [saving, setSaving] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Category state for saving to contacts
+  const [categories, setCategories] = useState<{ id: string; name: string; color: string | null }[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('__none__');
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      let q = supabase.from('contact_categories').select('id, name, color').eq('user_id', user.id);
+      if (activeClientId) q = q.eq('client_id', activeClientId);
+      const { data } = await q.order('name');
+      setCategories(data || []);
+    })();
+  }, [user, activeClientId, saving]);
+
   // Email generation state
   const [generatingIdx, setGeneratingIdx] = useState<number | null>(null);
   const [selectedTone, setSelectedTone] = useState('professional');
