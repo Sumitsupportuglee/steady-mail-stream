@@ -491,17 +491,56 @@ export default function LeadFinder() {
                         </Select>
                       </div>
                       <Button
-                        onClick={handleSaveToContacts}
+                        onClick={() => setSaveDialogOpen(true)}
                         disabled={selectedLeads.size === 0 || saving}
                         size="sm"
                       >
-                        {saving ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <UserPlus className="mr-2 h-4 w-4" />
-                        )}
+                        <UserPlus className="mr-2 h-4 w-4" />
                         Save {selectedLeads.size > 0 ? `${selectedLeads.size} ` : ''}to Contacts
                       </Button>
+
+                      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Save to Contacts</DialogTitle>
+                            <DialogDescription>
+                              Choose a category for {selectedLeads.size} selected lead(s), or add them without one.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>Category</Label>
+                              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">No category</SelectItem>
+                                  {categories.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                  ))}
+                                  <SelectItem value="__new__">+ Create new category…</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {selectedCategory === '__new__' && (
+                              <div className="space-y-2">
+                                <Label>New category name</Label>
+                                <Input
+                                  placeholder="e.g. Restaurants - NYC"
+                                  value={newCategoryName}
+                                  onChange={(e) => setNewCategoryName(e.target.value)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
+                            <Button onClick={handleSaveToContacts} disabled={saving}>
+                              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Save
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </>
                   )}
                 </div>
