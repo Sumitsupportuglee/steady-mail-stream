@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -87,6 +87,22 @@ export default function LeadFinder() {
   const [selectedLeads, setSelectedLeads] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Category state for saving to contacts
+  const [categories, setCategories] = useState<{ id: string; name: string; color: string | null }[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('__none__');
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      let q = supabase.from('contact_categories').select('id, name, color').eq('user_id', user.id);
+      if (activeClientId) q = q.eq('client_id', activeClientId);
+      const { data } = await q.order('name');
+      setCategories(data || []);
+    })();
+  }, [user, activeClientId, saving]);
 
   // Email generation state
   const [generatingIdx, setGeneratingIdx] = useState<number | null>(null);
@@ -222,6 +238,31 @@ export default function LeadFinder() {
 
     setSaving(true);
     try {
+      // Resolve category
+      let categoryId: string | null = null;
+      if (selectedCategory === '__new__') {
+        const trimmed = newCategoryName.trim();
+        if (!trimmed) {
+          toast({ title: 'Category name required', variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+        const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+        if (existing) {
+          categoryId = existing.id;
+        } else {
+          const { data, error } = await supabase
+            .from('contact_categories')
+            .insert({ user_id: user!.id, client_id: activeClientId, name: trimmed })
+            .select()
+            .single();
+          if (error) throw error;
+          categoryId = data.id;
+        }
+      } else if (selectedCategory !== '__none__') {
+        categoryId = selectedCategory;
+      }
+
       const contacts = Array.from(selectedLeads).flatMap((idx) => {
         const lead = leads[idx];
         return lead.emails.map((email) => ({
@@ -230,6 +271,7 @@ export default function LeadFinder() {
           name: lead.name || null,
           status: 'active' as const,
           client_id: activeClientId,
+          category_id: categoryId,
         }));
       });
 
@@ -244,6 +286,9 @@ export default function LeadFinder() {
 
       toast({ title: 'Contacts saved', description: `${contacts.length} contact(s) added successfully.` });
       setSelectedLeads(new Set());
+      setSaveDialogOpen(false);
+      setSelectedCategory('__none__');
+      setNewCategoryName('');
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to save contacts', variant: 'destructive' });
     } finally {
@@ -446,17 +491,56 @@ export default function LeadFinder() {
                         </Select>
                       </div>
                       <Button
-                        onClick={handleSaveToContacts}
+                        onClick={() => setSaveDialogOpen(true)}
                         disabled={selectedLeads.size === 0 || saving}
                         size="sm"
                       >
-                        {saving ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <UserPlus className="mr-2 h-4 w-4" />
-                        )}
+                        <UserPlus className="mr-2 h-4 w-4" />
                         Save {selectedLeads.size > 0 ? `${selectedLeads.size} ` : ''}to Contacts
                       </Button>
+
+                      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Save to Contacts</DialogTitle>
+                            <DialogDescription>
+                              Choose a category for {selectedLeads.size} selected lead(s), or add them without one.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>Category</Label>
+                              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">No category</SelectItem>
+                                  {categories.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                  ))}
+                                  <SelectItem value="__new__">+ Create new category…</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {selectedCategory === '__new__' && (
+                              <div className="space-y-2">
+                                <Label>New category name</Label>
+                                <Input
+                                  placeholder="e.g. Restaurants - NYC"
+                                  value={newCategoryName}
+                                  onChange={(e) => setNewCategoryName(e.target.value)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
+                            <Button onClick={handleSaveToContacts} disabled={saving}>
+                              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Save
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </>
                   )}
                 </div>
