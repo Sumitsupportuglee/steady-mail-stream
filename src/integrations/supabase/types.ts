@@ -203,8 +203,39 @@ export type Database = {
           },
         ]
       }
+      contact_categories: {
+        Row: {
+          client_id: string | null
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
+          category_id: string | null
           client_id: string | null
           created_at: string | null
           email: string
@@ -215,6 +246,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category_id?: string | null
           client_id?: string | null
           created_at?: string | null
           email: string
@@ -225,6 +257,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category_id?: string | null
           client_id?: string | null
           created_at?: string | null
           email?: string

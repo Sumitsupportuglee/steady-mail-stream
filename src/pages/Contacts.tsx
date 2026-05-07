@@ -48,6 +48,9 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
+  FolderPlus,
+  Tag,
+  FolderInput,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -59,6 +62,13 @@ interface Contact {
   name: string | null;
   status: 'active' | 'bounced' | 'unsubscribed';
   created_at: string;
+  category_id: string | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  color: string | null;
 }
 
 type ImportStep = 'upload' | 'mapping' | 'preview' | 'importing';
@@ -71,15 +81,20 @@ interface CSVRow {
 }
 
 const NONE_VALUE = '__none__';
+const NEW_CATEGORY_VALUE = '__new__';
+const ALL_CATEGORIES = '__all__';
+const NO_CATEGORY = '__uncategorized__';
 const PAGE_SIZE = 25;
 
 export default function Contacts() {
   const { user } = useAuth();
   const { activeClientId } = useClient();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES);
   const [letterFilter, setLetterFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -87,11 +102,22 @@ export default function Contacts() {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Add contact form
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newContactCategory, setNewContactCategory] = useState<string>(NONE_VALUE);
+
+  // Category management
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
+
+  // Bulk assign
+  const [assignTargetCategory, setAssignTargetCategory] = useState<string>(NONE_VALUE);
+  const [assignNewCategoryName, setAssignNewCategoryName] = useState('');
 
   // CSV Import state
   const [importStep, setImportStep] = useState<ImportStep>('upload');
@@ -99,86 +125,119 @@ export default function Contacts() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [emailColumn, setEmailColumn] = useState('');
   const [nameColumn, setNameColumn] = useState(NONE_VALUE);
+  const [importCategory, setImportCategory] = useState<string>(NONE_VALUE);
+  const [importNewCategoryName, setImportNewCategoryName] = useState('');
   const [importProgress, setImportProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
-      fetchContacts();
+      fetchAll();
     }
   }, [user, activeClientId]);
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, statusFilter, letterFilter, sortField, sortDir]);
+  }, [searchQuery, statusFilter, categoryFilter, letterFilter, sortField, sortDir]);
+
+  const fetchAll = async () => {
+    await Promise.all([fetchContacts(), fetchCategories()]);
+    setLoading(false);
+  };
 
   const fetchContacts = async () => {
     try {
-      let query = supabase
-        .from('contacts')
-        .select('*')
-        .eq('user_id', user!.id);
+      let query = supabase.from('contacts').select('*').eq('user_id', user!.id);
       if (activeClientId) query = query.eq('client_id', activeClientId);
       const { data, error } = await query.order('created_at', { ascending: false }).limit(10000);
-
       if (error) throw error;
       setContacts((data || []) as Contact[]);
     } catch (error) {
       console.error('Error fetching contacts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load contacts',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+      toast({ title: 'Error', description: 'Failed to load contacts', variant: 'destructive' });
     }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      let query = supabase.from('contact_categories').select('*').eq('user_id', user!.id);
+      if (activeClientId) query = query.eq('client_id', activeClientId);
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+      setCategories((data || []) as Category[]);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const createCategory = async (name: string, color = '#3b82f6'): Promise<Category | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    // dedupe
+    const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing;
+    const { data, error } = await supabase
+      .from('contact_categories')
+      .insert({ user_id: user!.id, client_id: activeClientId, name: trimmed, color })
+      .select()
+      .single();
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return null;
+    }
+    setCategories((prev) => [...prev, data as Category].sort((a, b) => a.name.localeCompare(b.name)));
+    return data as Category;
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const cat = await createCategory(newCategoryName, newCategoryColor);
+    setIsSubmitting(false);
+    if (cat) {
+      toast({ title: 'Category created', description: `"${cat.name}" is ready.` });
+      setNewCategoryName('');
+      setNewCategoryColor('#3b82f6');
+      setIsCategoryDialogOpen(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Delete this category? Contacts will become uncategorized.')) return;
+    const { error } = await supabase.from('contact_categories').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    // unset on contacts locally
+    setContacts((prev) => prev.map((c) => (c.category_id === id ? { ...c, category_id: null } : c)));
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    toast({ title: 'Category deleted' });
   };
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     try {
+      const catId = newContactCategory !== NONE_VALUE ? newContactCategory : null;
       const { error } = await supabase.from('contacts').insert({
         user_id: user!.id,
         email: newEmail,
         name: newName || null,
         status: 'active',
         client_id: activeClientId,
+        category_id: catId,
       });
-
       if (error) throw error;
 
-      try {
-        const { error: webhookError } = await supabase.functions.invoke('trigger-webhook', {
-          body: {
-            event_type: 'contact_created',
-            data: {
-              email: newEmail,
-              name: newName || null,
-              client_id: activeClientId ?? null,
-            },
-          },
-        });
-        if (webhookError) console.warn('trigger-webhook failed:', webhookError);
-      } catch (e) {
-        console.warn('trigger-webhook failed:', e);
-      }
-
-      toast({ title: 'Contact added', description: 'Contact has been added successfully.' });
-
+      toast({ title: 'Contact added' });
       setNewName('');
       setNewEmail('');
+      setNewContactCategory(NONE_VALUE);
       setIsAddDialogOpen(false);
       fetchContacts();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to add contact',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to add contact', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -186,50 +245,62 @@ export default function Contacts() {
 
   const handleDeleteSelected = async () => {
     if (selectedContacts.size === 0) return;
-
     try {
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .in('id', Array.from(selectedContacts));
-
+      const { error } = await supabase.from('contacts').delete().in('id', Array.from(selectedContacts));
       if (error) throw error;
-
-      toast({
-        title: 'Contacts deleted',
-        description: `${selectedContacts.size} contact(s) have been removed.`,
-      });
-
+      toast({ title: 'Contacts deleted', description: `${selectedContacts.size} contact(s) removed.` });
       setSelectedContacts(new Set());
       fetchContacts();
     } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to delete', variant: 'destructive' });
+    }
+  };
+
+  const handleAssignCategory = async () => {
+    if (selectedContacts.size === 0) return;
+    setIsSubmitting(true);
+    try {
+      let targetId: string | null = null;
+      if (assignTargetCategory === NEW_CATEGORY_VALUE) {
+        const cat = await createCategory(assignNewCategoryName);
+        if (!cat) {
+          setIsSubmitting(false);
+          return;
+        }
+        targetId = cat.id;
+      } else if (assignTargetCategory !== NONE_VALUE) {
+        targetId = assignTargetCategory;
+      }
+      const { error } = await supabase
+        .from('contacts')
+        .update({ category_id: targetId })
+        .in('id', Array.from(selectedContacts));
+      if (error) throw error;
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete contacts',
-        variant: 'destructive',
+        title: 'Category assigned',
+        description: `${selectedContacts.size} contact(s) updated.`,
       });
+      setSelectedContacts(new Set());
+      setIsAssignDialogOpen(false);
+      setAssignTargetCategory(NONE_VALUE);
+      setAssignNewCategoryName('');
+      fetchContacts();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const finalizeParsedData = (rows: CSVRow[], headers: string[]) => {
     if (!rows.length || !headers.length) {
-      toast({
-        title: 'Empty file',
-        description: 'No rows or headers detected in the file.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Empty file', description: 'No rows or headers detected.', variant: 'destructive' });
       return;
     }
     setCsvData(rows);
     setCsvHeaders(headers);
-
-    const emailCol = headers.find(
-      (h) => h.toLowerCase().includes('email') || h.toLowerCase() === 'e-mail'
-    );
-    const nameCol = headers.find(
-      (h) => h.toLowerCase().includes('name') || h.toLowerCase() === 'full name'
-    );
-
+    const emailCol = headers.find((h) => h.toLowerCase().includes('email') || h.toLowerCase() === 'e-mail');
+    const nameCol = headers.find((h) => h.toLowerCase().includes('name') || h.toLowerCase() === 'full name');
     setEmailColumn(emailCol || '');
     setNameColumn(nameCol || NONE_VALUE);
     setImportStep('mapping');
@@ -238,9 +309,7 @@ export default function Contacts() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
-
     try {
       if (ext === 'xlsx' || ext === 'xls') {
         const reader = new FileReader();
@@ -253,15 +322,8 @@ export default function Contacts() {
             const headers = json.length ? Object.keys(json[0]) : [];
             finalizeParsedData(json, headers);
           } catch (err: any) {
-            toast({
-              title: 'Error parsing Excel file',
-              description: err.message || 'Could not read the file.',
-              variant: 'destructive',
-            });
+            toast({ title: 'Error parsing Excel', description: err.message, variant: 'destructive' });
           }
-        };
-        reader.onerror = () => {
-          toast({ title: 'File read error', description: 'Could not read the file.', variant: 'destructive' });
         };
         reader.readAsArrayBuffer(file);
       } else {
@@ -269,36 +331,35 @@ export default function Contacts() {
           header: true,
           skipEmptyLines: true,
           complete: (results) => {
-            const data = (results.data as CSVRow[]) || [];
-            const headers = results.meta.fields || [];
-            finalizeParsedData(data, headers);
+            finalizeParsedData((results.data as CSVRow[]) || [], results.meta.fields || []);
           },
           error: (error) => {
-            toast({
-              title: 'Error parsing CSV',
-              description: error.message,
-              variant: 'destructive',
-            });
+            toast({ title: 'Error parsing CSV', description: error.message, variant: 'destructive' });
           },
         });
       }
     } catch (err: any) {
-      toast({
-        title: 'Import error',
-        description: err?.message || 'Could not process file.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Import error', description: err?.message, variant: 'destructive' });
     }
   };
 
   const handleImport = async () => {
     if (!emailColumn) {
-      toast({
-        title: 'Error',
-        description: 'Please select the email column',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Please select the email column', variant: 'destructive' });
       return;
+    }
+
+    // Resolve target category
+    let targetCategoryId: string | null = null;
+    if (importCategory === NEW_CATEGORY_VALUE) {
+      const cat = await createCategory(importNewCategoryName);
+      if (!cat) {
+        toast({ title: 'Category required', description: 'Enter a name for the new category.', variant: 'destructive' });
+        return;
+      }
+      targetCategoryId = cat.id;
+    } else if (importCategory !== NONE_VALUE) {
+      targetCategoryId = importCategory;
     }
 
     setImportStep('importing');
@@ -306,7 +367,6 @@ export default function Contacts() {
 
     const useNameCol = nameColumn && nameColumn !== NONE_VALUE ? nameColumn : null;
 
-    // Dedup within file by email (case-insensitive)
     const seen = new Set<string>();
     const validContacts = csvData
       .map((row) => {
@@ -322,21 +382,17 @@ export default function Contacts() {
           name: useNameCol ? (row[useNameCol] || '').toString().trim() || null : null,
           status: 'active' as const,
           client_id: activeClientId,
+          category_id: targetCategoryId,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (validContacts.length === 0) {
-      toast({
-        title: 'No valid contacts',
-        description: 'No valid email addresses were found in the file.',
-        variant: 'destructive',
-      });
+      toast({ title: 'No valid contacts', description: 'No valid emails found.', variant: 'destructive' });
       setImportStep('preview');
       return;
     }
 
-    // Skip emails already present (avoids unique-constraint failures and duplicates)
     const existingLower = new Set(contacts.map((c) => c.email.toLowerCase()));
     const toInsert = validContacts.filter((c) => !existingLower.has(c.email.toLowerCase()));
     const skipped = validContacts.length - toInsert.length;
@@ -354,21 +410,15 @@ export default function Contacts() {
         inserted += batch.length;
         setImportProgress(Math.round(((i + 1) / batches) * 100));
       }
-
       toast({
         title: 'Import complete',
-        description: `${inserted} contacts imported${skipped ? `, ${skipped} duplicates skipped` : ''}.`,
+        description: `${inserted} imported${skipped ? `, ${skipped} duplicates skipped` : ''}.`,
       });
-
       resetImport();
       setIsImportDialogOpen(false);
       fetchContacts();
     } catch (error: any) {
-      toast({
-        title: 'Import failed',
-        description: error.message || 'Failed to import contacts',
-        variant: 'destructive',
-      });
+      toast({ title: 'Import failed', description: error.message, variant: 'destructive' });
       setImportStep('preview');
     }
   };
@@ -379,13 +429,18 @@ export default function Contacts() {
     setCsvHeaders([]);
     setEmailColumn('');
     setNameColumn(NONE_VALUE);
+    setImportCategory(NONE_VALUE);
+    setImportNewCategoryName('');
     setImportProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Counts per status (for tabs)
+  const categoryById = useMemo(() => {
+    const m = new Map<string, Category>();
+    categories.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [categories]);
+
   const statusCounts = useMemo(() => {
     const counts = { all: contacts.length, active: 0, bounced: 0, unsubscribed: 0 };
     for (const c of contacts) {
@@ -396,24 +451,33 @@ export default function Contacts() {
     return counts;
   }, [contacts]);
 
-  // Filter + sort
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    let uncategorized = 0;
+    for (const c of contacts) {
+      if (c.category_id) m.set(c.category_id, (m.get(c.category_id) || 0) + 1);
+      else uncategorized++;
+    }
+    return { byId: m, uncategorized };
+  }, [contacts]);
+
   const filteredContacts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     let list = contacts.filter((c) => {
       if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      if (categoryFilter !== ALL_CATEGORIES) {
+        if (categoryFilter === NO_CATEGORY) {
+          if (c.category_id) return false;
+        } else if (c.category_id !== categoryFilter) return false;
+      }
       if (letterFilter !== 'all') {
         const first = (c.name || c.email || '').trim().charAt(0).toUpperCase();
         if (letterFilter === '#') {
           if (/[A-Z]/.test(first)) return false;
-        } else if (first !== letterFilter) {
-          return false;
-        }
+        } else if (first !== letterFilter) return false;
       }
       if (q) {
-        return (
-          c.email.toLowerCase().includes(q) ||
-          (c.name?.toLowerCase().includes(q) ?? false)
-        );
+        return c.email.toLowerCase().includes(q) || (c.name?.toLowerCase().includes(q) ?? false);
       }
       return true;
     });
@@ -440,7 +504,7 @@ export default function Contacts() {
     });
 
     return list;
-  }, [contacts, searchQuery, statusFilter, letterFilter, sortField, sortDir]);
+  }, [contacts, searchQuery, statusFilter, categoryFilter, letterFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filteredContacts.length / PAGE_SIZE));
   const pagedContacts = useMemo(
@@ -449,9 +513,8 @@ export default function Contacts() {
   );
 
   const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
+    if (sortField === field) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else {
       setSortField(field);
       setSortDir(field === 'created_at' ? 'desc' : 'asc');
     }
@@ -470,19 +533,16 @@ export default function Contacts() {
     const pageIds = pagedContacts.map((c) => c.id);
     const allSelected = pageIds.every((id) => selectedContacts.has(id));
     const newSelected = new Set(selectedContacts);
-    if (allSelected) {
-      pageIds.forEach((id) => newSelected.delete(id));
-    } else {
-      pageIds.forEach((id) => newSelected.add(id));
-    }
+    if (allSelected) pageIds.forEach((id) => newSelected.delete(id));
+    else pageIds.forEach((id) => newSelected.add(id));
     setSelectedContacts(newSelected);
   };
 
   const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedContacts);
-    if (newSelected.has(id)) newSelected.delete(id);
-    else newSelected.add(id);
-    setSelectedContacts(newSelected);
+    const s = new Set(selectedContacts);
+    if (s.has(id)) s.delete(id);
+    else s.add(id);
+    setSelectedContacts(s);
   };
 
   const getStatusBadge = (status: string) => {
@@ -492,11 +552,7 @@ export default function Contacts() {
       unsubscribed: { variant: 'secondary', className: '' },
     };
     const config = variants[status] || variants.active;
-    return (
-      <Badge variant={config.variant} className={config.className}>
-        {status}
-      </Badge>
-    );
+    return <Badge variant={config.variant} className={config.className}>{status}</Badge>;
   };
 
   const letters = ['all', '#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
@@ -514,14 +570,62 @@ export default function Contacts() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Contacts</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your email contacts and lists
-            </p>
+            <p className="text-muted-foreground mt-1">Organize your contacts into categories</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            {/* New category */}
+            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  New Category
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleCreateCategory}>
+                  <DialogHeader>
+                    <DialogTitle>Create Category</DialogTitle>
+                    <DialogDescription>Group contacts under a label.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cat-name">Name *</Label>
+                      <Input
+                        id="cat-name"
+                        placeholder="e.g. VIP, Newsletter, Leads"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cat-color">Color</Label>
+                      <Input
+                        id="cat-color"
+                        type="color"
+                        value={newCategoryColor}
+                        onChange={(e) => setNewCategoryColor(e.target.value)}
+                        className="w-20 h-10 p-1"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Import */}
             <Dialog
               open={isImportDialogOpen}
               onOpenChange={(open) => {
@@ -538,9 +642,7 @@ export default function Contacts() {
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Import Contacts</DialogTitle>
-                  <DialogDescription>
-                    Upload a CSV or Excel file to bulk import contacts
-                  </DialogDescription>
+                  <DialogDescription>Upload contacts and assign them to a category</DialogDescription>
                 </DialogHeader>
 
                 {importStep === 'upload' && (
@@ -556,7 +658,7 @@ export default function Contacts() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      accept=".csv,.xlsx,.xls"
                       className="hidden"
                       onChange={handleFileUpload}
                     />
@@ -573,14 +675,10 @@ export default function Contacts() {
                       <div className="space-y-2">
                         <Label>Email Column *</Label>
                         <Select value={emailColumn} onValueChange={setEmailColumn}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select email column" />
-                          </SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder="Select email column" /></SelectTrigger>
                           <SelectContent>
-                            {csvHeaders.map((header) => (
-                              <SelectItem key={header} value={header}>
-                                {header}
-                              </SelectItem>
+                            {csvHeaders.map((h) => (
+                              <SelectItem key={h} value={h}>{h}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -588,27 +686,44 @@ export default function Contacts() {
                       <div className="space-y-2">
                         <Label>Name Column (optional)</Label>
                         <Select value={nameColumn} onValueChange={setNameColumn}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select name column" />
-                          </SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder="Select name column" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value={NONE_VALUE}>None</SelectItem>
-                            {csvHeaders.map((header) => (
-                              <SelectItem key={header} value={header}>
-                                {header}
-                              </SelectItem>
+                            {csvHeaders.map((h) => (
+                              <SelectItem key={h} value={h}>{h}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* Category picker */}
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label className="flex items-center gap-2">
+                          <Tag className="h-4 w-4" /> Add to Category
+                        </Label>
+                        <Select value={importCategory} onValueChange={setImportCategory}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE_VALUE}>No category</SelectItem>
+                            {categories.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                            <SelectItem value={NEW_CATEGORY_VALUE}>+ Create new category…</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {importCategory === NEW_CATEGORY_VALUE && (
+                          <Input
+                            placeholder="New category name"
+                            value={importNewCategoryName}
+                            onChange={(e) => setImportNewCategoryName(e.target.value)}
+                          />
+                        )}
+                      </div>
                     </div>
                     <DialogFooter className="mt-6">
-                      <Button variant="outline" onClick={resetImport}>
-                        Back
-                      </Button>
+                      <Button variant="outline" onClick={resetImport}>Back</Button>
                       <Button onClick={() => setImportStep('preview')} disabled={!emailColumn}>
-                        Preview
-                        <ArrowRight className="ml-2 h-4 w-4" />
+                        Preview <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </DialogFooter>
                   </div>
@@ -619,26 +734,29 @@ export default function Contacts() {
                     <p className="text-sm text-muted-foreground">Preview of first 5 rows:</p>
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Name</TableHead>
-                        </TableRow>
+                        <TableRow><TableHead>Email</TableHead><TableHead>Name</TableHead></TableRow>
                       </TableHeader>
                       <TableBody>
                         {csvData.slice(0, 5).map((row, i) => (
                           <TableRow key={i}>
                             <TableCell>{row[emailColumn]}</TableCell>
-                            <TableCell>
-                              {nameColumn && nameColumn !== NONE_VALUE ? row[nameColumn] : '-'}
-                            </TableCell>
+                            <TableCell>{nameColumn !== NONE_VALUE ? row[nameColumn] : '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
+                    {importCategory !== NONE_VALUE && (
+                      <p className="text-sm">
+                        Will be added to category:{' '}
+                        <Badge variant="secondary">
+                          {importCategory === NEW_CATEGORY_VALUE
+                            ? importNewCategoryName || '(unnamed)'
+                            : categoryById.get(importCategory)?.name}
+                        </Badge>
+                      </p>
+                    )}
                     <DialogFooter className="mt-6">
-                      <Button variant="outline" onClick={() => setImportStep('mapping')}>
-                        Back
-                      </Button>
+                      <Button variant="outline" onClick={() => setImportStep('mapping')}>Back</Button>
                       <Button onClick={handleImport}>Import {csvData.length} Contacts</Button>
                     </DialogFooter>
                   </div>
@@ -648,14 +766,13 @@ export default function Contacts() {
                   <div className="py-8 text-center">
                     <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
                     <p className="font-medium">Importing contacts...</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {importProgress}% complete
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">{importProgress}% complete</p>
                   </div>
                 )}
               </DialogContent>
             </Dialog>
 
+            {/* Add contact */}
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -672,42 +789,36 @@ export default function Contacts() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="contact-name">Name (optional)</Label>
-                      <Input
-                        id="contact-name"
-                        placeholder="John Doe"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                      />
+                      <Input id="contact-name" value={newName} onChange={(e) => setNewName(e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="contact-email">Email *</Label>
                       <Input
                         id="contact-email"
                         type="email"
-                        placeholder="john@example.com"
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
                         required
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={newContactCategory} onValueChange={setNewContactCategory}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE_VALUE}>No category</SelectItem>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsAddDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
                     <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Adding...
-                        </>
-                      ) : (
-                        'Add Contact'
-                      )}
+                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Add Contact
                     </Button>
                   </DialogFooter>
                 </form>
@@ -716,15 +827,67 @@ export default function Contacts() {
           </div>
         </div>
 
+        {/* Categories bar */}
+        {categories.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Tag className="h-4 w-4" /> Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={categoryFilter === ALL_CATEGORIES ? 'default' : 'outline'}
+                  onClick={() => setCategoryFilter(ALL_CATEGORIES)}
+                >
+                  All ({contacts.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={categoryFilter === NO_CATEGORY ? 'default' : 'outline'}
+                  onClick={() => setCategoryFilter(NO_CATEGORY)}
+                >
+                  Uncategorized ({categoryCounts.uncategorized})
+                </Button>
+                {categories.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant={categoryFilter === c.id ? 'default' : 'outline'}
+                      onClick={() => setCategoryFilter(c.id)}
+                      className="gap-2"
+                    >
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: c.color || '#3b82f6' }}
+                      />
+                      {c.name} ({categoryCounts.byId.get(c.id) || 0})
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => handleDeleteCategory(c.id)}
+                      title="Delete category"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Status tabs */}
         <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
           <TabsList>
             <TabsTrigger value="all">All ({statusCounts.all})</TabsTrigger>
             <TabsTrigger value="active">Active ({statusCounts.active})</TabsTrigger>
             <TabsTrigger value="bounced">Bounced ({statusCounts.bounced})</TabsTrigger>
-            <TabsTrigger value="unsubscribed">
-              Unsubscribed ({statusCounts.unsubscribed})
-            </TabsTrigger>
+            <TabsTrigger value="unsubscribed">Unsubscribed ({statusCounts.unsubscribed})</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -739,15 +902,57 @@ export default function Contacts() {
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 {selectedContacts.size > 0 && (
-                  <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete ({selectedContacts.size})
-                  </Button>
+                  <>
+                    <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <FolderInput className="mr-2 h-4 w-4" />
+                          Assign Category ({selectedContacts.size})
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Assign to Category</DialogTitle>
+                          <DialogDescription>
+                            Move {selectedContacts.size} selected contact(s) into a category.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <Select value={assignTargetCategory} onValueChange={setAssignTargetCategory}>
+                            <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>Remove category</SelectItem>
+                              {categories.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                              <SelectItem value={NEW_CATEGORY_VALUE}>+ Create new category…</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {assignTargetCategory === NEW_CATEGORY_VALUE && (
+                            <Input
+                              placeholder="New category name"
+                              value={assignNewCategoryName}
+                              onChange={(e) => setAssignNewCategoryName(e.target.value)}
+                            />
+                          )}
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>Cancel</Button>
+                          <Button onClick={handleAssignCategory} disabled={isSubmitting}>
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Apply
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete ({selectedContacts.size})
+                    </Button>
+                  </>
                 )}
                 <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-[150px]"><SelectValue placeholder="Sort by" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="created_at">Date added</SelectItem>
                     <SelectItem value="name">Name (A–Z)</SelectItem>
@@ -767,7 +972,6 @@ export default function Contacts() {
               </div>
             </div>
 
-            {/* Alphabet filter */}
             <div className="flex flex-wrap gap-1 mt-4">
               {letters.map((l) => (
                 <Button
@@ -788,7 +992,7 @@ export default function Contacts() {
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="font-medium text-lg">No contacts found</h3>
                 <p className="text-muted-foreground mt-1">
-                  {searchQuery || statusFilter !== 'all' || letterFilter !== 'all'
+                  {searchQuery || statusFilter !== 'all' || letterFilter !== 'all' || categoryFilter !== ALL_CATEGORIES
                     ? 'Try adjusting your filters'
                     : 'Add your first contact to get started'}
                 </p>
@@ -800,10 +1004,7 @@ export default function Contacts() {
                     <TableRow>
                       <TableHead className="w-12">
                         <Checkbox
-                          checked={
-                            pagedContacts.length > 0 &&
-                            pagedContacts.every((c) => selectedContacts.has(c.id))
-                          }
+                          checked={pagedContacts.length > 0 && pagedContacts.every((c) => selectedContacts.has(c.id))}
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
@@ -813,42 +1014,53 @@ export default function Contacts() {
                       <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('email')}>
                         Email <SortIcon field="email" />
                       </TableHead>
+                      <TableHead>Category</TableHead>
                       <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
                         Status <SortIcon field="status" />
                       </TableHead>
-                      <TableHead
-                        className="cursor-pointer select-none"
-                        onClick={() => toggleSort('created_at')}
-                      >
+                      <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('created_at')}>
                         Added <SortIcon field="created_at" />
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedContacts.map((contact) => (
-                      <TableRow key={contact.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedContacts.has(contact.id)}
-                            onCheckedChange={() => toggleSelect(contact.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{contact.name || '-'}</TableCell>
-                        <TableCell>{contact.email}</TableCell>
-                        <TableCell>{getStatusBadge(contact.status)}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(contact.created_at).toLocaleDateString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {pagedContacts.map((contact) => {
+                      const cat = contact.category_id ? categoryById.get(contact.category_id) : null;
+                      return (
+                        <TableRow key={contact.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedContacts.has(contact.id)}
+                              onCheckedChange={() => toggleSelect(contact.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{contact.name || '-'}</TableCell>
+                          <TableCell>{contact.email}</TableCell>
+                          <TableCell>
+                            {cat ? (
+                              <Badge variant="secondary" className="gap-1.5">
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: cat.color || '#3b82f6' }}
+                                />
+                                {cat.name}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(contact.status)}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(contact.created_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
 
-                {/* Pagination */}
                 <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -856,8 +1068,7 @@ export default function Contacts() {
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={page === 1}
                     >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
+                      <ChevronLeft className="h-4 w-4" /> Previous
                     </Button>
                     <Button
                       variant="outline"
@@ -865,8 +1076,7 @@ export default function Contacts() {
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       disabled={page >= totalPages}
                     >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
+                      Next <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
