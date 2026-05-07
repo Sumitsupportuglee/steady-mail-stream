@@ -238,6 +238,31 @@ export default function LeadFinder() {
 
     setSaving(true);
     try {
+      // Resolve category
+      let categoryId: string | null = null;
+      if (selectedCategory === '__new__') {
+        const trimmed = newCategoryName.trim();
+        if (!trimmed) {
+          toast({ title: 'Category name required', variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+        const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+        if (existing) {
+          categoryId = existing.id;
+        } else {
+          const { data, error } = await supabase
+            .from('contact_categories')
+            .insert({ user_id: user!.id, client_id: activeClientId, name: trimmed })
+            .select()
+            .single();
+          if (error) throw error;
+          categoryId = data.id;
+        }
+      } else if (selectedCategory !== '__none__') {
+        categoryId = selectedCategory;
+      }
+
       const contacts = Array.from(selectedLeads).flatMap((idx) => {
         const lead = leads[idx];
         return lead.emails.map((email) => ({
@@ -246,6 +271,7 @@ export default function LeadFinder() {
           name: lead.name || null,
           status: 'active' as const,
           client_id: activeClientId,
+          category_id: categoryId,
         }));
       });
 
@@ -260,6 +286,9 @@ export default function LeadFinder() {
 
       toast({ title: 'Contacts saved', description: `${contacts.length} contact(s) added successfully.` });
       setSelectedLeads(new Set());
+      setSaveDialogOpen(false);
+      setSelectedCategory('__none__');
+      setNewCategoryName('');
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to save contacts', variant: 'destructive' });
     } finally {
