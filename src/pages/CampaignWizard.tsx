@@ -142,8 +142,12 @@ export default function CampaignWizard() {
     }
   };
 
+  const contactsInSelectedCategories = () =>
+    contacts.filter(c => c.category_id && selectedCategoryIds.has(c.category_id));
+
   const getRecipientCount = () => {
     if (audienceType === 'all') return contacts.length;
+    if (audienceType === 'category') return contactsInSelectedCategories().length;
     return selectedContacts.size;
   };
 
@@ -157,6 +161,13 @@ export default function CampaignWizard() {
     setSelectedContacts(newSelected);
   };
 
+  const toggleCategory = (id: string) => {
+    const next = new Set(selectedCategoryIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedCategoryIds(next);
+  };
+
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
   const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
 
@@ -167,9 +178,11 @@ export default function CampaignWizard() {
       const identity = identities.find(i => i.id === selectedIdentity);
       if (!identity) throw new Error('No sender identity selected');
 
-      const allRecipients = audienceType === 'all' 
-        ? contacts 
-        : contacts.filter(c => selectedContacts.has(c.id));
+      const allRecipients = audienceType === 'all'
+        ? contacts
+        : audienceType === 'category'
+          ? contactsInSelectedCategories()
+          : contacts.filter(c => selectedContacts.has(c.id));
 
       // Filter out obviously invalid email formats — they would just bounce
       // with 550/553 and waste sending quota / reputation.
