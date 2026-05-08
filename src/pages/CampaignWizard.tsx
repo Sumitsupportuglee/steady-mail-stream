@@ -94,7 +94,7 @@ export default function CampaignWizard() {
     try {
       let contactsQuery = supabase
         .from('contacts')
-        .select('id, email, name')
+        .select('id, email, name, category_id')
         .eq('user_id', user!.id)
         .eq('status', 'active');
       if (activeClientId) contactsQuery = contactsQuery.eq('client_id', activeClientId);
@@ -110,13 +110,20 @@ export default function CampaignWizard() {
         .select('id, label, smtp_username, smtp_host, is_default')
         .eq('user_id', user!.id);
 
-      const [contactsRes, identitiesRes, smtpRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery]);
+      let categoriesQuery = supabase
+        .from('contact_categories')
+        .select('id, name, color')
+        .eq('user_id', user!.id);
+      if (activeClientId) categoriesQuery = categoriesQuery.eq('client_id', activeClientId);
+
+      const [contactsRes, identitiesRes, smtpRes, categoriesRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery, categoriesQuery]);
 
       if (contactsRes.error) throw contactsRes.error;
       if (identitiesRes.error) throw identitiesRes.error;
 
-      setContacts(contactsRes.data || []);
+      setContacts((contactsRes.data as Contact[]) || []);
       setIdentities(identitiesRes.data || []);
+      setCategories((categoriesRes.data as Category[]) || []);
       const smtpData = (smtpRes.data as any[]) || [];
       setSmtpAccounts(smtpData);
       // Auto-select default SMTP
