@@ -1080,17 +1080,31 @@ export default function Contacts() {
                           <TableCell className="font-medium">{contact.name || '-'}</TableCell>
                           <TableCell>{contact.email}</TableCell>
                           <TableCell>
-                            {cat ? (
-                              <Badge variant="secondary" className="gap-1.5">
-                                <span
-                                  className="inline-block w-2 h-2 rounded-full"
-                                  style={{ backgroundColor: cat.color || '#3b82f6' }}
-                                />
-                                {cat.name}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
+                            <Select
+                              value={contact.category_id || NONE_VALUE}
+                              onValueChange={(v) => handleRowCategoryChange(contact.id, v)}
+                            >
+                              <SelectTrigger className="h-8 w-[170px]">
+                                {cat ? (
+                                  <span className="flex items-center gap-1.5 truncate">
+                                    <span
+                                      className="inline-block w-2 h-2 rounded-full shrink-0"
+                                      style={{ backgroundColor: cat.color || '#3b82f6' }}
+                                    />
+                                    <span className="truncate">{cat.name}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Uncategorized</span>
+                                )}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NONE_VALUE}>Uncategorized</SelectItem>
+                                {categories.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                ))}
+                                <SelectItem value={NEW_CATEGORY_VALUE}>+ Create new category…</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>{getStatusBadge(contact.status)}</TableCell>
                           <TableCell className="text-muted-foreground">
