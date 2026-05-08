@@ -845,8 +845,16 @@ export default function Contacts() {
                           {categories.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                           ))}
+                          <SelectItem value={NEW_CATEGORY_VALUE}>+ Create new category…</SelectItem>
                         </SelectContent>
                       </Select>
+                      {newContactCategory === NEW_CATEGORY_VALUE && (
+                        <Input
+                          placeholder="New category name"
+                          value={newContactNewCategoryName}
+                          onChange={(e) => setNewContactNewCategoryName(e.target.value)}
+                        />
+                      )}
                     </div>
                   </div>
                   <DialogFooter>
