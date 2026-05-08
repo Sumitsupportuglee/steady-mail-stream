@@ -418,24 +418,58 @@ export default function CampaignWizard() {
 
               <div className="space-y-4">
                 <Label>Recipients</Label>
-                <div className="flex gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Button
                     variant={audienceType === 'all' ? 'default' : 'outline'}
                     onClick={() => setAudienceType('all')}
-                    className="flex-1"
                   >
                     <Users className="mr-2 h-4 w-4" />
-                    All Active Contacts ({contacts.length})
+                    All Active ({contacts.length})
+                  </Button>
+                  <Button
+                    variant={audienceType === 'category' ? 'default' : 'outline'}
+                    onClick={() => setAudienceType('category')}
+                    disabled={categories.length === 0}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    By Category ({contactsInSelectedCategories().length})
                   </Button>
                   <Button
                     variant={audienceType === 'selected' ? 'default' : 'outline'}
                     onClick={() => setAudienceType('selected')}
-                    className="flex-1"
                   >
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Select Specific ({selectedContacts.size})
+                    Specific ({selectedContacts.size})
                   </Button>
                 </div>
+
+                {audienceType === 'category' && (
+                  <div className="border rounded-lg p-3 space-y-2 max-h-64 overflow-auto">
+                    {categories.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No categories yet. Create categories in the Contacts page.
+                      </p>
+                    ) : (
+                      categories.map((cat) => {
+                        const count = contacts.filter(c => c.category_id === cat.id).length;
+                        return (
+                          <div key={cat.id} className="flex items-center gap-3 p-2 rounded hover:bg-muted/50">
+                            <Checkbox
+                              checked={selectedCategoryIds.has(cat.id)}
+                              onCheckedChange={() => toggleCategory(cat.id)}
+                            />
+                            <span
+                              className="inline-block h-3 w-3 rounded-full"
+                              style={{ backgroundColor: cat.color || '#3b82f6' }}
+                            />
+                            <div className="flex-1 font-medium">{cat.name}</div>
+                            <Badge variant="secondary">{count}</Badge>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
 
                 {audienceType === 'selected' && (
                   <div className="border rounded-lg max-h-64 overflow-auto">
