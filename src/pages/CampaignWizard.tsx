@@ -35,6 +35,13 @@ interface Contact {
   id: string;
   email: string;
   name: string | null;
+  category_id: string | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  color: string | null;
 }
 
 interface SenderIdentity {
@@ -72,8 +79,10 @@ export default function CampaignWizard() {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
   const [selectedSmtp, setSelectedSmtp] = useState('');
-  const [audienceType, setAudienceType] = useState<'all' | 'selected'>('all');
+  const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
@@ -85,7 +94,7 @@ export default function CampaignWizard() {
     try {
       let contactsQuery = supabase
         .from('contacts')
-        .select('id, email, name')
+        .select('id, email, name, category_id')
         .eq('user_id', user!.id)
         .eq('status', 'active');
       if (activeClientId) contactsQuery = contactsQuery.eq('client_id', activeClientId);
@@ -101,13 +110,20 @@ export default function CampaignWizard() {
         .select('id, label, smtp_username, smtp_host, is_default')
         .eq('user_id', user!.id);
 
-      const [contactsRes, identitiesRes, smtpRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery]);
+      let categoriesQuery = supabase
+        .from('contact_categories')
+        .select('id, name, color')
+        .eq('user_id', user!.id);
+      if (activeClientId) categoriesQuery = categoriesQuery.eq('client_id', activeClientId);
+
+      const [contactsRes, identitiesRes, smtpRes, categoriesRes] = await Promise.all([contactsQuery, identitiesQuery, smtpQuery, categoriesQuery]);
 
       if (contactsRes.error) throw contactsRes.error;
       if (identitiesRes.error) throw identitiesRes.error;
 
-      setContacts(contactsRes.data || []);
+      setContacts((contactsRes.data as Contact[]) || []);
       setIdentities(identitiesRes.data || []);
+      setCategories((categoriesRes.data as Category[]) || []);
       const smtpData = (smtpRes.data as any[]) || [];
       setSmtpAccounts(smtpData);
       // Auto-select default SMTP
@@ -126,8 +142,12 @@ export default function CampaignWizard() {
     }
   };
 
+  const contactsInSelectedCategories = () =>
+    contacts.filter(c => c.category_id && selectedCategoryIds.has(c.category_id));
+
   const getRecipientCount = () => {
     if (audienceType === 'all') return contacts.length;
+    if (audienceType === 'category') return contactsInSelectedCategories().length;
     return selectedContacts.size;
   };
 
@@ -141,6 +161,13 @@ export default function CampaignWizard() {
     setSelectedContacts(newSelected);
   };
 
+  const toggleCategory = (id: string) => {
+    const next = new Set(selectedCategoryIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedCategoryIds(next);
+  };
+
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
   const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
 
@@ -151,9 +178,11 @@ export default function CampaignWizard() {
       const identity = identities.find(i => i.id === selectedIdentity);
       if (!identity) throw new Error('No sender identity selected');
 
-      const allRecipients = audienceType === 'all' 
-        ? contacts 
-        : contacts.filter(c => selectedContacts.has(c.id));
+      const allRecipients = audienceType === 'all'
+        ? contacts
+        : audienceType === 'category'
+          ? contactsInSelectedCategories()
+          : contacts.filter(c => selectedContacts.has(c.id));
 
       // Filter out obviously invalid email formats — they would just bounce
       // with 550/553 and waste sending quota / reputation.
@@ -389,24 +418,58 @@ export default function CampaignWizard() {
 
               <div className="space-y-4">
                 <Label>Recipients</Label>
-                <div className="flex gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Button
                     variant={audienceType === 'all' ? 'default' : 'outline'}
                     onClick={() => setAudienceType('all')}
-                    className="flex-1"
                   >
                     <Users className="mr-2 h-4 w-4" />
-                    All Active Contacts ({contacts.length})
+                    All Active ({contacts.length})
+                  </Button>
+                  <Button
+                    variant={audienceType === 'category' ? 'default' : 'outline'}
+                    onClick={() => setAudienceType('category')}
+                    disabled={categories.length === 0}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    By Category ({contactsInSelectedCategories().length})
                   </Button>
                   <Button
                     variant={audienceType === 'selected' ? 'default' : 'outline'}
                     onClick={() => setAudienceType('selected')}
-                    className="flex-1"
                   >
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Select Specific ({selectedContacts.size})
+                    Specific ({selectedContacts.size})
                   </Button>
                 </div>
+
+                {audienceType === 'category' && (
+                  <div className="border rounded-lg p-3 space-y-2 max-h-64 overflow-auto">
+                    {categories.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No categories yet. Create categories in the Contacts page.
+                      </p>
+                    ) : (
+                      categories.map((cat) => {
+                        const count = contacts.filter(c => c.category_id === cat.id).length;
+                        return (
+                          <div key={cat.id} className="flex items-center gap-3 p-2 rounded hover:bg-muted/50">
+                            <Checkbox
+                              checked={selectedCategoryIds.has(cat.id)}
+                              onCheckedChange={() => toggleCategory(cat.id)}
+                            />
+                            <span
+                              className="inline-block h-3 w-3 rounded-full"
+                              style={{ backgroundColor: cat.color || '#3b82f6' }}
+                            />
+                            <div className="flex-1 font-medium">{cat.name}</div>
+                            <Badge variant="secondary">{count}</Badge>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
 
                 {audienceType === 'selected' && (
                   <div className="border rounded-lg max-h-64 overflow-auto">
