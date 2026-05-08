@@ -110,6 +110,7 @@ export default function Contacts() {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newContactCategory, setNewContactCategory] = useState<string>(NONE_VALUE);
+  const [newContactNewCategoryName, setNewContactNewCategoryName] = useState('');
 
   // Category management
   const [newCategoryName, setNewCategoryName] = useState('');
