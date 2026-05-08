@@ -35,6 +35,13 @@ interface Contact {
   id: string;
   email: string;
   name: string | null;
+  category_id: string | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  color: string | null;
 }
 
 interface SenderIdentity {
