@@ -220,7 +220,18 @@ export default function Contacts() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const catId = newContactCategory !== NONE_VALUE ? newContactCategory : null;
+      let catId: string | null = null;
+      if (newContactCategory === NEW_CATEGORY_VALUE) {
+        const cat = await createCategory(newContactNewCategoryName);
+        if (!cat) {
+          toast({ title: 'Category required', description: 'Enter a name for the new category.', variant: 'destructive' });
+          setIsSubmitting(false);
+          return;
+        }
+        catId = cat.id;
+      } else if (newContactCategory !== NONE_VALUE) {
+        catId = newContactCategory;
+      }
       const { error } = await supabase.from('contacts').insert({
         user_id: user!.id,
         email: newEmail,
@@ -235,12 +246,35 @@ export default function Contacts() {
       setNewName('');
       setNewEmail('');
       setNewContactCategory(NONE_VALUE);
+      setNewContactNewCategoryName('');
       setIsAddDialogOpen(false);
       fetchContacts();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to add contact', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRowCategoryChange = async (contactId: string, value: string) => {
+    let targetId: string | null = null;
+    if (value === NEW_CATEGORY_VALUE) {
+      const name = window.prompt('New category name:');
+      if (!name || !name.trim()) return;
+      const cat = await createCategory(name);
+      if (!cat) return;
+      targetId = cat.id;
+    } else if (value !== NONE_VALUE) {
+      targetId = value;
+    }
+    // optimistic
+    setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, category_id: targetId } : c)));
+    const { error } = await supabase.from('contacts').update({ category_id: targetId }).eq('id', contactId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      fetchContacts();
+    } else {
+      toast({ title: 'Category updated' });
     }
   };
 
