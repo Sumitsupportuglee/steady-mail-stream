@@ -79,8 +79,10 @@ export default function CampaignWizard() {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
   const [selectedSmtp, setSelectedSmtp] = useState('');
-  const [audienceType, setAudienceType] = useState<'all' | 'selected'>('all');
+  const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
