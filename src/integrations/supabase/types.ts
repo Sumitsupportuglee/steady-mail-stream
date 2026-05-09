@@ -752,6 +752,7 @@ export type Database = {
           email: string
           id: string
           name: string
+          partnership_type: string | null
         }
         Insert: {
           contact_number: string
@@ -760,6 +761,7 @@ export type Database = {
           email: string
           id?: string
           name: string
+          partnership_type?: string | null
         }
         Update: {
           contact_number?: string
@@ -768,6 +770,7 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          partnership_type?: string | null
         }
         Relationships: []
       }

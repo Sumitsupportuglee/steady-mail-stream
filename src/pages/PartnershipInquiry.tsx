@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
@@ -14,10 +15,11 @@ const schema = z.object({
   email: z.string().trim().email('Invalid email').max(255),
   contact_number: z.string().trim().min(5, 'Contact number is required').max(30),
   country: z.string().trim().min(1, 'Country is required').max(80),
+  partnership_type: z.string().trim().min(10, 'Please describe the partnership you are looking for (min 10 characters)').max(2000),
 });
 
 export default function PartnershipInquiry() {
-  const [form, setForm] = useState({ name: '', email: '', contact_number: '', country: '' });
+  const [form, setForm] = useState({ name: '', email: '', contact_number: '', country: '', partnership_type: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -36,7 +38,7 @@ export default function PartnershipInquiry() {
       return;
     }
     setSubmitted(true);
-    setForm({ name: '', email: '', contact_number: '', country: '' });
+    setForm({ name: '', email: '', contact_number: '', country: '', partnership_type: '' });
     toast({ title: 'Inquiry submitted', description: 'Thanks! We will reach out shortly.' });
   };
 
@@ -84,6 +86,12 @@ export default function PartnershipInquiry() {
                   <Label htmlFor="country">Country *</Label>
                   <Input id="country" value={form.country} maxLength={80}
                     onChange={(e) => setForm({ ...form, country: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="partnership_type">Type of Partnership looking for *</Label>
+                  <Textarea id="partnership_type" value={form.partnership_type} maxLength={2000} rows={5}
+                    placeholder="Briefly describe the type of partnership, collaboration, or ownership opportunity you are interested in..."
+                    onChange={(e) => setForm({ ...form, partnership_type: e.target.value })} required />
                 </div>
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? 'Submitting...' : 'Submit Inquiry'}
