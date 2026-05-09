@@ -29,7 +29,7 @@ export default function PartnershipInquiry() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from('partnership_inquiries').insert([parsed.data]);
+    const { error } = await supabase.from('partnership_inquiries').insert(parsed.data as any);
     setSubmitting(false);
     if (error) {
       toast({ title: 'Submission failed', description: error.message, variant: 'destructive' });
