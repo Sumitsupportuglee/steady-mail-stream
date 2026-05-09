@@ -18,8 +18,8 @@ const DEMO_ACCOUNTS = ['admin@personacraft.in'];
 // Pilot accounts with premium access
 const PILOT_ACCOUNTS = ['info@budfi.in'];
 
-// Pilot account start date (renewed on 2026-04-10)
-const PILOT_START_DATE = new Date('2026-04-10T00:00:00Z');
+// Pilot account start date (renewed on 2026-05-09 for additional 30 days)
+const PILOT_START_DATE = new Date('2026-05-09T00:00:00Z');
 
 export function useSubscription() {
   const { user } = useAuth();
