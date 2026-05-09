@@ -1,0 +1,1 @@
+ALTER TABLE public.partnership_inquiries ADD COLUMN partnership_type text;
