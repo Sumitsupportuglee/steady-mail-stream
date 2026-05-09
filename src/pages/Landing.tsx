@@ -112,6 +112,9 @@ export default function Landing() {
             <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
               Pricing
             </a>
+            <Link to="/partnership" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+              Partnership
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">
@@ -355,6 +358,7 @@ export default function Landing() {
             <span className="font-semibold">Senddot</span>
           </div>
           <div className="flex items-center gap-4">
+            <Link to="/partnership" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Inquire for Partnership</Link>
             <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms & Conditions</Link>
           </div>
           <p className="text-sm text-muted-foreground">

@@ -744,6 +744,33 @@ export type Database = {
         }
         Relationships: []
       }
+      partnership_inquiries: {
+        Row: {
+          contact_number: string
+          country: string
+          created_at: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          contact_number: string
+          country: string
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+        }
+        Update: {
+          contact_number?: string
+          country?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
