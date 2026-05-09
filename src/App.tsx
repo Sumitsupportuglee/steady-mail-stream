@@ -27,6 +27,7 @@ import ClientReport from "./pages/ClientReport";
 import CRM from "./pages/CRM";
 import Integrations from "./pages/Integrations";
 import Unsubscribe from "./pages/Unsubscribe";
+import PartnershipInquiry from "./pages/PartnershipInquiry";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
