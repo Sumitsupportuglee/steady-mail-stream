@@ -50,6 +50,7 @@ const App = () => (
               {/* Public routes */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/unsubscribe" element={<Unsubscribe />} />
+              <Route path="/partnership" element={<PartnershipInquiry />} />
               
               {/* Protected routes */}
               <Route path="/" element={<Landing />} />
