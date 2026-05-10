@@ -344,86 +344,76 @@ Deno.serve(async (req) => {
       }
       console.log('Scraping single URL:', url);
 
-      const lead = await scrapeUrl(url, apiKey, 20000, null);
-      if (lead) leads.push(lead);
+      const result = await scrapeUrl(url, apiKey, 20000, null);
+      if (result.lead) leads.push(result.lead);
     } else {
-      // Search mode — adaptive strategy based on limit
+      // Search mode — adaptive strategy based on requested limit
       console.log(`Searching for: "${query}" (limit: ${limit})`);
 
-      // Step 1: Fast search (no scraping) to get URLs
-      const searchController = new AbortController();
-      const searchTimeout = setTimeout(() => searchController.abort(), 12000);
+      // Tiered candidate pool: bigger pool for bigger asks
+      const candidatePool = limit <= 10 ? 20 : limit <= 25 ? 60 : 100;
+      const fastMode = limit >= 25;
 
-      let searchResults: any[] = [];
-      try {
-        const searchRes = await fetch('https://api.firecrawl.dev/v1/search', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query: query + ' contact email phone',
-            limit: Math.min(limit * 2, 20), // Search more than needed since some won't have contacts
-          }),
-          signal: searchController.signal,
-        });
+      // For larger requests, fan out multiple search variants in parallel for better contact-page hit rate
+      const searchQueries: string[] = limit >= 25
+        ? [`${query} contact email`, `${query} about us`]
+        : [`${query} contact email phone`];
 
-        clearTimeout(searchTimeout);
-        const searchData = await searchRes.json();
+      const perQueryLimit = Math.ceil(candidatePool / searchQueries.length);
 
-        if (!searchRes.ok) {
-          console.error('Firecrawl search error:', searchData);
-          return new Response(
-            JSON.stringify({ success: false, error: searchData.error || `Search failed with status ${searchRes.status}` }),
-            { status: searchRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+      const searchBatches = await Promise.all(
+        searchQueries.map(q => firecrawlSearch(q, perQueryLimit, apiKey, 12000))
+      );
+      const allResults = searchBatches.flat();
 
-        searchResults = searchData.data || [];
-        console.log(`Search returned ${searchResults.length} results`);
-      } catch (e) {
-        clearTimeout(searchTimeout);
-        console.error('Search timed out');
-        return new Response(
-          JSON.stringify({ success: false, error: 'Search timed out. Try a more specific query.' }),
-          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (searchResults.length === 0) {
+      if (allResults.length === 0) {
         return new Response(
           JSON.stringify({ success: true, leads: [] }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Step 2: Scrape URLs in parallel batches with adaptive timeouts
-      // We have ~15s left after search. Process in batches of 5 to avoid overwhelming.
-      const BATCH_SIZE = 5;
-      const PER_URL_TIMEOUT = limit <= 5 ? 8000 : limit <= 10 ? 6000 : 4000;
-      const urlsToScrape = searchResults.filter((r: any) => r.url).slice(0, Math.min(limit * 2, 20));
+      // Dedupe by registrable hostname so we don't scrape the same domain twice
+      const seenHosts = new Set<string>();
+      const urlsToScrape: any[] = [];
+      for (const r of allResults) {
+        if (!r.url) continue;
+        const key = hostnameKey(r.url);
+        if (seenHosts.has(key)) continue;
+        seenHosts.add(key);
+        urlsToScrape.push(r);
+        if (urlsToScrape.length >= candidatePool) break;
+      }
 
-      console.log(`Scraping ${urlsToScrape.length} URLs in batches of ${BATCH_SIZE} (${PER_URL_TIMEOUT}ms timeout each)`);
+      // Reasonable, uniform per-URL timeout — rely on parallelism, not starvation
+      const BATCH_SIZE = 10;
+      const PER_URL_TIMEOUT = 8000;
+
+      console.log(`Scraping up to ${urlsToScrape.length} unique-host URLs in batches of ${BATCH_SIZE} (${PER_URL_TIMEOUT}ms each, fastMode=${fastMode})`);
+
+      const stats = { success: 0, no_contact: 0, timeout: 0, error: 0 };
 
       for (let i = 0; i < urlsToScrape.length; i += BATCH_SIZE) {
-        // Stop early if we have enough leads
         if (leads.length >= limit) break;
 
         const batch = urlsToScrape.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map((result: any) =>
-          scrapeUrl(result.url, apiKey, PER_URL_TIMEOUT, result.title || null)
+        const batchResults = await Promise.allSettled(
+          batch.map((result: any) =>
+            scrapeUrl(result.url, apiKey, PER_URL_TIMEOUT, result.title || null, fastMode)
+          )
         );
-
-        const batchResults = await Promise.allSettled(batchPromises);
-        for (const result of batchResults) {
-          if (result.status === 'fulfilled' && result.value) {
-            leads.push(result.value);
+        for (const r of batchResults) {
+          if (r.status === 'fulfilled') {
+            stats[r.value.outcome]++;
+            if (r.value.lead) leads.push(r.value.lead);
+          } else {
+            stats.error++;
           }
         }
-
-        console.log(`After batch ${Math.floor(i / BATCH_SIZE) + 1}: ${leads.length} leads found`);
+        console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: leads=${leads.length} ${JSON.stringify(stats)}`);
       }
+
+      console.log(`Yield: pool=${urlsToScrape.length} ${JSON.stringify(stats)}`);
     }
 
     // Trim to requested limit
