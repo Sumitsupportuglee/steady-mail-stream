@@ -222,8 +222,9 @@ async function scrapeUrl(
   url: string,
   apiKey: string,
   timeoutMs: number,
-  fallbackTitle: string | null
-): Promise<ScrapedLead | null> {
+  fallbackTitle: string | null,
+  fastMode = false
+): Promise<{ lead: ScrapedLead | null; outcome: 'success' | 'no_contact' | 'timeout' | 'error' }> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
