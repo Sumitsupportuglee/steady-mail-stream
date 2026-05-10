@@ -428,8 +428,13 @@ export default function Contacts() {
       return;
     }
 
-    const existingLower = new Set(contacts.map((c) => c.email.toLowerCase()));
-    const toInsert = validContacts.filter((c) => !existingLower.has(c.email.toLowerCase()));
+    // Dedupe per (email + category) so the same email can exist in multiple categories
+    const existingKeys = new Set(
+      contacts.map((c) => `${c.email.toLowerCase()}::${c.category_id || ''}`)
+    );
+    const toInsert = validContacts.filter(
+      (c) => !existingKeys.has(`${c.email.toLowerCase()}::${c.category_id || ''}`)
+    );
     const skipped = validContacts.length - toInsert.length;
 
     const batchSize = 200;
