@@ -419,7 +419,8 @@ export default function LeadFinder() {
                       <SelectContent>
                         <SelectItem value="5">5 leads</SelectItem>
                         <SelectItem value="10">10 leads</SelectItem>
-                        <SelectItem value="50">50 leads (slower)</SelectItem>
+                        <SelectItem value="25">25 leads (recommended for bulk)</SelectItem>
+                        <SelectItem value="50">50 leads (best-effort, may return fewer)</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">

@@ -1,55 +1,70 @@
-# Fix Bulk Email Delivery Failures
+# Plan: Add 25-lead option + improve Lead Finder yield
 
-## Diagnosis of the 4 errors in your screenshot
+## Why current 50-lead requests under-deliver
 
-| Error | Root cause | Fix category |
-|---|---|---|
-| `MAIL FROM failed: 503 Bad sequence of commands` | After a previous recipient failed (RCPT/DATA error), we go straight into the next email's `MAIL FROM` without sending `RSET`. The server is still mid-transaction → 503. Also our `readResponse()` reads a single 4 KB chunk, so a stray banner/late line from a prior command can leak into the next read and look like a "bad sequence". | SMTP protocol bug |
-| `SMTP connection error: AUTH PLAIN failed: 535 Authentication credentials invalid` | The user's stored SMTP password is wrong / expired / app-password revoked. There's no fallback to `AUTH LOGIN` and no friendly signal back to the user. | User config + UX |
-| `RCPT TO failed: 550 ... invalid DNS MX or A/AAAA resource record` (×2) | The recipient address belongs to a domain with no MX. We send to it, get a hard bounce, and then keep trying it (and the *next* sends fail with 503 because the session is poisoned — see row 1). | Address hygiene + auto-suppression |
+In `supabase/functions/scrape-leads/index.ts`:
+- Search candidate pool is capped at `Math.min(limit*2, 20)` — never more than 20 URLs even when 50 are requested.
+- Per-URL scrape timeout drops to **4s** when `limit > 10` — most business sites need 6–8s, so the majority abort silently.
+- Single Firecrawl `/search` call → narrow candidate pool, low contact-page hit rate.
+- Whole job must finish inside one Edge Function invocation (~30s budget after search).
 
-So the headline issue is: **one bad recipient corrupts the SMTP session, and every subsequent email in that session fails with 503**. This is why you see 98 failures — most are collateral damage, not 98 independently broken emails.
+Result: a request for 50 realistically returns 5–10. A 25-lead target is achievable within one invocation if we widen the pool and rebalance timeouts.
 
-## What we will change
+## Frontend changes — `src/pages/LeadFinder.tsx`
 
-### 1. `supabase/functions/process-queue/index.ts` — SMTP session hardening
-- **Send `RSET` after every failed `MAIL FROM` / `RCPT TO` / `DATA`**, before moving to the next email. This clears the transaction and eliminates the cascading `503 Bad sequence of commands`.
-- **Reconnect the session if `RSET` itself fails** or if we see `503` / `421` — the connection is unrecoverable, open a fresh one for the rest of the chunk.
-- **Fix `readResponse()`** to read full multi-line SMTP replies properly (loop until the line with `XYZ ` space-separator, drain the socket between commands). Today a single `read()` can return a partial frame, which intermittently presents as 503 on the next command.
-- **Use a real hostname in `EHLO`** instead of `EHLO localhost`. Some providers (Hostinger, Zoho, Outlook) penalise or reject `localhost`. We'll use the sender's domain (from `from_email`).
-- **Lower `PER_SESSION_LIMIT`** from 20 → 15 and add a clean `RSET` between sends even on success, which most providers prefer in long sessions.
+1. Add a new dropdown option **"25 leads (recommended for bulk)"** between 10 and 50.
+2. Reword the 50-lead option to **"50 leads (best-effort, may return fewer)"** so expectations are clear.
+3. Default remains 5. No other UI changes.
 
-### 2. Auto-suppress permanently bad recipients
-- When we get a **5xx on RCPT TO** (e.g. `550 invalid DNS MX`, `550 mailbox unavailable`, `550 user unknown`, `553 ...`), insert the address into `email_unsubscribes` (or a new `bounced_emails` reason) and mark the contact `status = 'bounced'` in `contacts`. Future campaigns will skip them automatically (the queue already checks `email_unsubscribes`).
-- This stops the same dead address from burning attempts on every campaign and protects sender reputation.
+## Edge function changes — `supabase/functions/scrape-leads/index.ts`
 
-### 3. Pre-flight recipient validation (cheap, optional but big win)
-- Before queueing a campaign in `CampaignWizard.tsx`, run a lightweight syntactic + MX check on contacts and warn the user. Either:
-  - **(default)** Just validate the email format strictly and skip obviously broken ones, OR
-  - Add an admin-triggered "Verify list" button in `Contacts.tsx` that runs an Edge Function doing DNS MX lookups (via DNS-over-HTTPS — same pattern already used for domain verification) and marks bad contacts as `bounced`.
+(All Deno/TypeScript — no Python is involved; the project's scraping runs in Deno Edge Functions per the [Scraping Limitations](mem://constraints/scraping-automation-limitations) memory.)
 
-We'll go with (1) auto-suppression on bounce + strict format check at queue time. List-wide MX verification can be a follow-up if you want.
+### 1. Lift the candidate-URL cap intelligently
+- Replace `Math.min(limit * 2, 20)` with a tier-based cap:
+  - `limit ≤ 10` → fetch up to **20** URLs (unchanged).
+  - `limit = 25` → fetch up to **60** URLs.
+  - `limit = 50` → fetch up to **100** URLs.
+- Use Firecrawl `/v2/search` with `limit: candidatePool` (v2 supports up to 100 per call, well within Google-compliant search-API usage since Firecrawl is the search provider, not us scraping Google directly).
 
-### 4. Auth failure → clear user-facing signal
-- When `AUTH PLAIN/LOGIN` returns `535`, mark **all** queued emails for that SMTP account as `failed` with a single, human-readable message: *"SMTP login rejected (535). Update your SMTP password in Settings → SMTP Accounts."*
-- Surface a banner on the Dashboard and Campaigns page when any of the user's SMTP accounts has a recent `535` so the user knows immediately and re-enters credentials.
+### 2. Multi-query expansion (better contact-page hit rate)
+- For `limit ≥ 25`, fan out 2 search variants in parallel:
+  - `"<query> contact email"`
+  - `"<query> about us"`
+- Merge + dedupe by registrable hostname so we don't scrape the same domain twice.
 
-### 5. Better error analytics on the failed-deliveries panel
-- Group identical errors and show counts (e.g. "550 invalid DNS MX × 47") instead of repeating the same line — makes the actual problem obvious at a glance.
-- Add a tiny "Why?" tooltip per error type explaining the cause and the fix.
+### 3. Rebalance timeouts and concurrency
+- Per-URL timeout: **8s** for all sizes (drop the punishing 4s).
+- Batch size: increase from 5 → **10** parallel scrapes.
+- Search timeout: keep 12s.
+- Stop early once `leads.length >= limit` (already implemented; keep).
 
-## Files to change
+### 4. Faster scrape mode
+- For `limit ≥ 25`, request Firecrawl scrape with `onlyMainContent: true` and `formats: ['markdown']` only — smaller responses, faster completion, still preserves emails/phones.
 
-- `supabase/functions/process-queue/index.ts` — SMTP client (`RSET`, EHLO hostname, response reader, auto-suppress on 5xx RCPT, classify 535 distinctly)
-- `src/pages/CampaignWizard.tsx` — strict email format validation before insert
-- `src/pages/Campaigns.tsx` (or wherever the "Failed Deliveries" card lives — will locate during implementation) — group/count errors, add tooltips, add 535-banner
-- Possibly a small migration to add a `bounce_reason` column to `email_unsubscribes` (or use existing `reason` field if present) so auto-suppressed addresses are distinguishable from user-initiated unsubscribes
+### 5. Yield telemetry (optional but cheap)
+- Log a one-line summary at the end: `pool=60 attempted=60 success=27 timeout=18 no_contact=15`. Helps us tune later.
 
-## What you should expect after the fix
+## What stays the same
 
-- The cascading **503** errors disappear → success rate on large sends jumps significantly even before any list cleaning.
-- Repeat sends to the same dead address stop after the first bounce.
-- A `535` on one account no longer silently retries 98 times — you see one clear "fix your password" message.
-- Failed-deliveries panel becomes actionable: you see *what* failed and *why*, grouped.
+- Firecrawl-only scraping (still respects [Scraping Limitations](mem://constraints/scraping-automation-limitations)).
+- AI email validation pass remains.
+- Master + user business directory persistence unchanged.
+- No new database columns, no new secrets.
+- 50-lead path still works — just doesn't promise a hard 50.
 
-Approve this plan and I'll implement it.
+## Expected outcome
+
+| Requested | Today  | After fix    |
+|-----------|--------|--------------|
+| 5         | 5      | 5            |
+| 10        | 8–10   | 8–10         |
+| **25**    | n/a    | **18–25**    |
+| 50        | 5–10   | 25–40        |
+
+## Files affected
+
+- `supabase/functions/scrape-leads/index.ts` — pool cap, multi-query, timeouts, batch size, telemetry.
+- `src/pages/LeadFinder.tsx` — add `25 leads` option, reword `50 leads`.
+
+No DB migration. No new packages. No client-side polling architecture (kept simple — single invocation still finishes well under timeout for 25).
