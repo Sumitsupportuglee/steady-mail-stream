@@ -238,7 +238,7 @@ async function scrapeUrl(
       body: JSON.stringify({
         url,
         formats: ['markdown'],
-        onlyMainContent: false,
+        onlyMainContent: fastMode,
       }),
       signal: controller.signal,
     });
@@ -254,19 +254,57 @@ async function scrapeUrl(
 
       if (emails.length > 0 || phones.length > 0) {
         return {
-          url,
-          name: extractBusinessName(markdown, metadata) || fallbackTitle,
-          emails,
-          phones,
-          website: url,
-          address: extractAddress(markdown),
+          lead: {
+            url,
+            name: extractBusinessName(markdown, metadata) || fallbackTitle,
+            emails,
+            phones,
+            website: url,
+            address: extractAddress(markdown),
+          },
+          outcome: 'success',
         };
       }
+      return { lead: null, outcome: 'no_contact' };
     }
-    return null;
+    return { lead: null, outcome: 'error' };
+  } catch (err: any) {
+    const isTimeout = err?.name === 'AbortError';
+    return { lead: null, outcome: isTimeout ? 'timeout' : 'error' };
+  }
+}
+
+// Extract registrable hostname for dedup (e.g. "blog.example.com" -> "example.com")
+function hostnameKey(url: string): string {
+  try {
+    const h = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const parts = h.split('.');
+    return parts.length > 2 ? parts.slice(-2).join('.') : h;
   } catch {
-    console.log('Skipping URL (timeout/error):', url);
-    return null;
+    return url;
+  }
+}
+
+async function firecrawlSearch(query: string, limit: number, apiKey: string, timeoutMs: number): Promise<any[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch('https://api.firecrawl.dev/v1/search', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('Search error for', query, data);
+      return [];
+    }
+    return data.data || [];
+  } catch {
+    clearTimeout(timeout);
+    return [];
   }
 }
 
