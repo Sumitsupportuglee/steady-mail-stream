@@ -114,7 +114,7 @@ export default function CampaignWizard() {
 
       const smtpQuery = supabase
         .from('smtp_accounts' as any)
-        .select('id, label, smtp_username, smtp_host, is_default')
+        .select('id, label, smtp_username, smtp_host, is_default, daily_send_limit, hourly_send_limit, emails_sent_today, emails_sent_this_hour, is_active')
         .eq('user_id', user!.id);
 
       let categoriesQuery = supabase
