@@ -533,6 +533,7 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('status', 'pending')
       .lt('attempt_count', MAX_ATTEMPTS)
+      .or(`scheduled_for.is.null,scheduled_for.lte.${new Date().toISOString()}`)
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE)
 
