@@ -446,24 +446,92 @@ export default function CampaignWizard() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label>SMTP Account</Label>
-                <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select SMTP account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {smtpAccounts.map((acct) => (
-                      <SelectItem key={acct.id} value={acct.id}>
-                        {acct.label} ({acct.smtp_username})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>SMTP Sending</Label>
+                  {smtpAccounts.length >= 2 && (
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={smtpMode === 'single' ? 'default' : 'outline'}
+                        onClick={() => setSmtpMode('single')}
+                      >
+                        Single account
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={smtpMode === 'rotation' ? 'default' : 'outline'}
+                        onClick={() => setSmtpMode('rotation')}
+                      >
+                        Rotation pool
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2 && (
+                  <p className="text-xs text-amber-600 flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    You have {recipientCount} recipients. Rotation pool is recommended for sends over 100 to avoid hitting per-account limits.
+                  </p>
+                )}
+
+                {smtpMode === 'single' ? (
+                  <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select SMTP account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {smtpAccounts.map((acct) => (
+                        <SelectItem key={acct.id} value={acct.id}>
+                          {acct.label} ({acct.smtp_username})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="border rounded-lg p-3 space-y-2 max-h-64 overflow-auto">
+                    {smtpAccounts.map((acct) => {
+                      const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
+                      const isInactive = acct.is_active === false;
+                      return (
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-50' : ''}`}>
+                          <Checkbox
+                            checked={smtpPool.has(acct.id)}
+                            onCheckedChange={() => togglePool(acct.id)}
+                            disabled={isInactive}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{acct.label}</div>
+                            <div className="text-xs text-muted-foreground truncate">{acct.smtp_username}</div>
+                          </div>
+                          <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
+                        </div>
+                      );
+                    })}
+                    {poolList.length >= 2 && (
+                      <div className="pt-2 mt-2 border-t text-xs text-muted-foreground">
+                        Pool capacity: <strong className="text-foreground">{poolDailyCapacity}</strong>/day · <strong className="text-foreground">{poolHourlyCapacity}</strong>/hour
+                        {recipientCount > poolDailyCapacity && (
+                          <span className="text-amber-600 ml-2">· Will take ~{Math.ceil(recipientCount / Math.max(1, poolDailyCapacity))} day(s) to finish</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {smtpAccounts.length === 0 && (
                   <p className="text-sm text-destructive flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Add an SMTP account in Settings first
+                  </p>
+                )}
+                {smtpMode === 'rotation' && poolList.length < 2 && smtpAccounts.length >= 2 && (
+                  <p className="text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Select at least 2 accounts for rotation
                   </p>
                 )}
               </div>
