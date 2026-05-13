@@ -234,6 +234,33 @@ export default function Settings() {
     }
   };
 
+  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean }) => {
+    try {
+      const { error } = await supabase.from('smtp_accounts' as any).update(updates as any).eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Updated' });
+      fetchAll();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleResetSmtpCounters = async (id: string) => {
+    try {
+      const { error } = await supabase.from('smtp_accounts' as any).update({
+        emails_sent_today: 0,
+        emails_sent_this_hour: 0,
+        last_daily_reset: new Date().toISOString(),
+        last_hourly_reset: new Date().toISOString(),
+      } as any).eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Counters reset' });
+      fetchAll();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const handleSetDefaultSmtp = async (id: string) => {
     try {
       // unset all defaults
