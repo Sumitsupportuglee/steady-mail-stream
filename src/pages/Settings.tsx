@@ -52,6 +52,11 @@ interface SmtpAccount {
   smtp_encryption: string;
   is_default: boolean;
   created_at: string;
+  daily_send_limit?: number;
+  hourly_send_limit?: number;
+  emails_sent_today?: number;
+  emails_sent_this_hour?: number;
+  is_active?: boolean;
 }
 
 interface SenderIdentity {
