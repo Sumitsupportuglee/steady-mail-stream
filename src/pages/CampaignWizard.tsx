@@ -175,8 +175,34 @@ export default function CampaignWizard() {
     setSelectedCategoryIds(next);
   };
 
+  const recipientCount = getRecipientCount();
+  const shouldUseRotation = recipientCount > 100;
+  const poolList = smtpAccounts.filter(a => smtpPool.has(a.id) && (a.is_active ?? true));
+  const poolDailyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.daily_send_limit ?? 300) - (a.emails_sent_today ?? 0)), 0);
+  const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
+
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
+  const canProceedToStep3 =
+    selectedIdentity !== '' &&
+    recipientCount > 0 &&
+    (smtpMode === 'single' ? selectedSmtp !== '' : poolList.length >= 2);
+
+  const togglePool = (id: string) => {
+    const next = new Set(smtpPool);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSmtpPool(next);
+  };
+
+  // Auto-suggest rotation mode when recipient count crosses threshold
+  useEffect(() => {
+    if (shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2) {
+      setSmtpMode('rotation');
+      // Pre-fill pool with all active accounts
+      setSmtpPool(new Set(smtpAccounts.filter(a => a.is_active ?? true).map(a => a.id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldUseRotation, smtpAccounts.length]);
 
   const handleQueueCampaign = async () => {
     setIsSubmitting(true);
@@ -191,8 +217,6 @@ export default function CampaignWizard() {
           ? contactsInSelectedCategories()
           : contacts.filter(c => selectedContacts.has(c.id));
 
-      // Filter out obviously invalid email formats — they would just bounce
-      // with 550/553 and waste sending quota / reputation.
       const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       const recipients = allRecipients.filter(c => EMAIL_RX.test(c.email.trim()));
       const skipped = allRecipients.length - recipients.length;
@@ -206,6 +230,9 @@ export default function CampaignWizard() {
         throw new Error('No valid recipients after filtering');
       }
 
+      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
+      const poolIds = useRotation ? poolList.map(a => a.id) : null;
+
       // Create campaign
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
@@ -217,18 +244,36 @@ export default function CampaignWizard() {
           status: 'queued',
           recipient_count: recipients.length,
           client_id: activeClientId,
-        })
+          smtp_rotation_pool: poolIds,
+        } as any)
         .select()
         .single();
 
       if (campaignError) throw campaignError;
 
-      // Create email queue entries
-      const queueEntries = recipients.map(contact => {
-        // Replace template variables
-        let personalizedBody = bodyHtml
+      // Smoothing: spread sends across time so we never spike. Pace by the
+      // pool's combined hourly capacity (or single account's hourly limit).
+      const totalHourly = useRotation
+        ? poolList.reduce((s, a) => s + (a.hourly_send_limit ?? 50), 0)
+        : (smtpAccounts.find(a => a.id === selectedSmtp)?.hourly_send_limit ?? 50);
+      // ms between sends to stay under hourly cap
+      const intervalMs = totalHourly > 0 ? Math.ceil((60 * 60 * 1000) / totalHourly) : 0;
+      const startTime = Date.now();
+
+      // Round-robin assignment across the pool (single mode → always same account)
+      const queueEntries = recipients.map((contact, idx) => {
+        const personalizedBody = bodyHtml
           .replace(/\{\{name\}\}/gi, contact.name || 'there')
           .replace(/\{\{email\}\}/gi, contact.email);
+
+        const smtpAccountId = useRotation
+          ? poolIds![idx % poolIds!.length]
+          : (selectedSmtp || null);
+
+        // Spread schedule. First batch sends immediately (scheduled_for = null).
+        const scheduledFor = idx < (totalHourly || 50)
+          ? null
+          : new Date(startTime + idx * intervalMs).toISOString();
 
         return {
           user_id: user!.id,
@@ -239,11 +284,11 @@ export default function CampaignWizard() {
           subject,
           body: personalizedBody,
           status: 'pending' as const,
-          smtp_account_id: selectedSmtp || null,
-        };
+          smtp_account_id: smtpAccountId,
+          scheduled_for: scheduledFor,
+        } as any;
       });
 
-      // Batch insert in chunks of 100
       const batchSize = 100;
       for (let i = 0; i < queueEntries.length; i += batchSize) {
         const batch = queueEntries.slice(i, i + batchSize);
