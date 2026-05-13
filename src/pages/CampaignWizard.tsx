@@ -57,6 +57,11 @@ interface SmtpAccount {
   smtp_username: string;
   smtp_host: string;
   is_default: boolean;
+  daily_send_limit?: number;
+  hourly_send_limit?: number;
+  emails_sent_today?: number;
+  emails_sent_this_hour?: number;
+  is_active?: boolean;
 }
 
 type WizardStep = 1 | 2 | 3;
