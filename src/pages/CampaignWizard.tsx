@@ -57,6 +57,11 @@ interface SmtpAccount {
   smtp_username: string;
   smtp_host: string;
   is_default: boolean;
+  daily_send_limit?: number;
+  hourly_send_limit?: number;
+  emails_sent_today?: number;
+  emails_sent_this_hour?: number;
+  is_active?: boolean;
 }
 
 type WizardStep = 1 | 2 | 3;
@@ -79,6 +84,8 @@ export default function CampaignWizard() {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
   const [selectedSmtp, setSelectedSmtp] = useState('');
+  const [smtpMode, setSmtpMode] = useState<'single' | 'rotation'>('single');
+  const [smtpPool, setSmtpPool] = useState<Set<string>>(new Set());
   const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
@@ -107,7 +114,7 @@ export default function CampaignWizard() {
 
       const smtpQuery = supabase
         .from('smtp_accounts' as any)
-        .select('id, label, smtp_username, smtp_host, is_default')
+        .select('id, label, smtp_username, smtp_host, is_default, daily_send_limit, hourly_send_limit, emails_sent_today, emails_sent_this_hour, is_active')
         .eq('user_id', user!.id);
 
       let categoriesQuery = supabase
@@ -168,8 +175,34 @@ export default function CampaignWizard() {
     setSelectedCategoryIds(next);
   };
 
+  const recipientCount = getRecipientCount();
+  const shouldUseRotation = recipientCount > 100;
+  const poolList = smtpAccounts.filter(a => smtpPool.has(a.id) && (a.is_active ?? true));
+  const poolDailyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.daily_send_limit ?? 300) - (a.emails_sent_today ?? 0)), 0);
+  const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
+
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const canProceedToStep3 = selectedIdentity !== '' && selectedSmtp !== '' && getRecipientCount() > 0;
+  const canProceedToStep3 =
+    selectedIdentity !== '' &&
+    recipientCount > 0 &&
+    (smtpMode === 'single' ? selectedSmtp !== '' : poolList.length >= 2);
+
+  const togglePool = (id: string) => {
+    const next = new Set(smtpPool);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSmtpPool(next);
+  };
+
+  // Auto-suggest rotation mode when recipient count crosses threshold
+  useEffect(() => {
+    if (shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2) {
+      setSmtpMode('rotation');
+      // Pre-fill pool with all active accounts
+      setSmtpPool(new Set(smtpAccounts.filter(a => a.is_active ?? true).map(a => a.id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldUseRotation, smtpAccounts.length]);
 
   const handleQueueCampaign = async () => {
     setIsSubmitting(true);
@@ -184,8 +217,6 @@ export default function CampaignWizard() {
           ? contactsInSelectedCategories()
           : contacts.filter(c => selectedContacts.has(c.id));
 
-      // Filter out obviously invalid email formats — they would just bounce
-      // with 550/553 and waste sending quota / reputation.
       const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       const recipients = allRecipients.filter(c => EMAIL_RX.test(c.email.trim()));
       const skipped = allRecipients.length - recipients.length;
@@ -199,6 +230,9 @@ export default function CampaignWizard() {
         throw new Error('No valid recipients after filtering');
       }
 
+      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
+      const poolIds = useRotation ? poolList.map(a => a.id) : null;
+
       // Create campaign
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
@@ -210,18 +244,36 @@ export default function CampaignWizard() {
           status: 'queued',
           recipient_count: recipients.length,
           client_id: activeClientId,
-        })
+          smtp_rotation_pool: poolIds,
+        } as any)
         .select()
         .single();
 
       if (campaignError) throw campaignError;
 
-      // Create email queue entries
-      const queueEntries = recipients.map(contact => {
-        // Replace template variables
-        let personalizedBody = bodyHtml
+      // Smoothing: spread sends across time so we never spike. Pace by the
+      // pool's combined hourly capacity (or single account's hourly limit).
+      const totalHourly = useRotation
+        ? poolList.reduce((s, a) => s + (a.hourly_send_limit ?? 50), 0)
+        : (smtpAccounts.find(a => a.id === selectedSmtp)?.hourly_send_limit ?? 50);
+      // ms between sends to stay under hourly cap
+      const intervalMs = totalHourly > 0 ? Math.ceil((60 * 60 * 1000) / totalHourly) : 0;
+      const startTime = Date.now();
+
+      // Round-robin assignment across the pool (single mode → always same account)
+      const queueEntries = recipients.map((contact, idx) => {
+        const personalizedBody = bodyHtml
           .replace(/\{\{name\}\}/gi, contact.name || 'there')
           .replace(/\{\{email\}\}/gi, contact.email);
+
+        const smtpAccountId = useRotation
+          ? poolIds![idx % poolIds!.length]
+          : (selectedSmtp || null);
+
+        // Spread schedule. First batch sends immediately (scheduled_for = null).
+        const scheduledFor = idx < (totalHourly || 50)
+          ? null
+          : new Date(startTime + idx * intervalMs).toISOString();
 
         return {
           user_id: user!.id,
@@ -232,11 +284,11 @@ export default function CampaignWizard() {
           subject,
           body: personalizedBody,
           status: 'pending' as const,
-          smtp_account_id: selectedSmtp || null,
-        };
+          smtp_account_id: smtpAccountId,
+          scheduled_for: scheduledFor,
+        } as any;
       });
 
-      // Batch insert in chunks of 100
       const batchSize = 100;
       for (let i = 0; i < queueEntries.length; i += batchSize) {
         const batch = queueEntries.slice(i, i + batchSize);
@@ -394,24 +446,92 @@ export default function CampaignWizard() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label>SMTP Account</Label>
-                <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select SMTP account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {smtpAccounts.map((acct) => (
-                      <SelectItem key={acct.id} value={acct.id}>
-                        {acct.label} ({acct.smtp_username})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>SMTP Sending</Label>
+                  {smtpAccounts.length >= 2 && (
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={smtpMode === 'single' ? 'default' : 'outline'}
+                        onClick={() => setSmtpMode('single')}
+                      >
+                        Single account
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={smtpMode === 'rotation' ? 'default' : 'outline'}
+                        onClick={() => setSmtpMode('rotation')}
+                      >
+                        Rotation pool
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2 && (
+                  <p className="text-xs text-amber-600 flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    You have {recipientCount} recipients. Rotation pool is recommended for sends over 100 to avoid hitting per-account limits.
+                  </p>
+                )}
+
+                {smtpMode === 'single' ? (
+                  <Select value={selectedSmtp} onValueChange={setSelectedSmtp}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select SMTP account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {smtpAccounts.map((acct) => (
+                        <SelectItem key={acct.id} value={acct.id}>
+                          {acct.label} ({acct.smtp_username})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="border rounded-lg p-3 space-y-2 max-h-64 overflow-auto">
+                    {smtpAccounts.map((acct) => {
+                      const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
+                      const isInactive = acct.is_active === false;
+                      return (
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-50' : ''}`}>
+                          <Checkbox
+                            checked={smtpPool.has(acct.id)}
+                            onCheckedChange={() => togglePool(acct.id)}
+                            disabled={isInactive}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{acct.label}</div>
+                            <div className="text-xs text-muted-foreground truncate">{acct.smtp_username}</div>
+                          </div>
+                          <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
+                        </div>
+                      );
+                    })}
+                    {poolList.length >= 2 && (
+                      <div className="pt-2 mt-2 border-t text-xs text-muted-foreground">
+                        Pool capacity: <strong className="text-foreground">{poolDailyCapacity}</strong>/day · <strong className="text-foreground">{poolHourlyCapacity}</strong>/hour
+                        {recipientCount > poolDailyCapacity && (
+                          <span className="text-amber-600 ml-2">· Will take ~{Math.ceil(recipientCount / Math.max(1, poolDailyCapacity))} day(s) to finish</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {smtpAccounts.length === 0 && (
                   <p className="text-sm text-destructive flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Add an SMTP account in Settings first
+                  </p>
+                )}
+                {smtpMode === 'rotation' && poolList.length < 2 && smtpAccounts.length >= 2 && (
+                  <p className="text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Select at least 2 accounts for rotation
                   </p>
                 )}
               </div>
@@ -534,9 +654,11 @@ export default function CampaignWizard() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">
-                    <div className="text-sm text-muted-foreground">SMTP Account</div>
+                    <div className="text-sm text-muted-foreground">Sending</div>
                     <div className="font-medium mt-1">
-                      {smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected'}
+                      {smtpMode === 'rotation' && poolList.length >= 2
+                        ? `Rotation pool · ${poolList.length} accounts (${poolDailyCapacity}/day)`
+                        : (smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected')}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">

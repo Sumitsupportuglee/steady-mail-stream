@@ -103,6 +103,7 @@ export type Database = {
           id: string
           recipient_count: number | null
           sender_identity_id: string | null
+          smtp_rotation_pool: string[] | null
           status: Database["public"]["Enums"]["campaign_status_type"] | null
           subject: string
           updated_at: string | null
@@ -115,6 +116,7 @@ export type Database = {
           id?: string
           recipient_count?: number | null
           sender_identity_id?: string | null
+          smtp_rotation_pool?: string[] | null
           status?: Database["public"]["Enums"]["campaign_status_type"] | null
           subject: string
           updated_at?: string | null
@@ -127,6 +129,7 @@ export type Database = {
           id?: string
           recipient_count?: number | null
           sender_identity_id?: string | null
+          smtp_rotation_pool?: string[] | null
           status?: Database["public"]["Enums"]["campaign_status_type"] | null
           subject?: string
           updated_at?: string | null
@@ -464,6 +467,7 @@ export type Database = {
           error_log: string | null
           from_email: string
           id: string
+          scheduled_for: string | null
           sent_at: string | null
           smtp_account_id: string | null
           status: Database["public"]["Enums"]["email_status_type"] | null
@@ -480,6 +484,7 @@ export type Database = {
           error_log?: string | null
           from_email: string
           id?: string
+          scheduled_for?: string | null
           sent_at?: string | null
           smtp_account_id?: string | null
           status?: Database["public"]["Enums"]["email_status_type"] | null
@@ -496,6 +501,7 @@ export type Database = {
           error_log?: string | null
           from_email?: string
           id?: string
+          scheduled_for?: string | null
           sent_at?: string | null
           smtp_account_id?: string | null
           status?: Database["public"]["Enums"]["email_status_type"] | null
@@ -940,9 +946,16 @@ export type Database = {
         Row: {
           client_id: string | null
           created_at: string
+          daily_send_limit: number
+          emails_sent_this_hour: number
+          emails_sent_today: number
+          hourly_send_limit: number
           id: string
+          is_active: boolean
           is_default: boolean
           label: string
+          last_daily_reset: string
+          last_hourly_reset: string
           provider: string
           smtp_encryption: string
           smtp_host: string
@@ -955,9 +968,16 @@ export type Database = {
         Insert: {
           client_id?: string | null
           created_at?: string
+          daily_send_limit?: number
+          emails_sent_this_hour?: number
+          emails_sent_today?: number
+          hourly_send_limit?: number
           id?: string
+          is_active?: boolean
           is_default?: boolean
           label?: string
+          last_daily_reset?: string
+          last_hourly_reset?: string
           provider?: string
           smtp_encryption?: string
           smtp_host: string
@@ -970,9 +990,16 @@ export type Database = {
         Update: {
           client_id?: string | null
           created_at?: string
+          daily_send_limit?: number
+          emails_sent_this_hour?: number
+          emails_sent_today?: number
+          hourly_send_limit?: number
           id?: string
+          is_active?: boolean
           is_default?: boolean
           label?: string
+          last_daily_reset?: string
+          last_hourly_reset?: string
           provider?: string
           smtp_encryption?: string
           smtp_host?: string
@@ -1135,6 +1162,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      pick_available_smtp: {
+        Args: { _pool: string[]; _user_id: string }
+        Returns: string
+      }
+      reserve_smtp_quota: { Args: { _smtp_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"

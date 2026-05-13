@@ -52,6 +52,11 @@ interface SmtpAccount {
   smtp_encryption: string;
   is_default: boolean;
   created_at: string;
+  daily_send_limit?: number;
+  hourly_send_limit?: number;
+  emails_sent_today?: number;
+  emails_sent_this_hour?: number;
+  is_active?: boolean;
 }
 
 interface SenderIdentity {
@@ -223,6 +228,33 @@ export default function Settings() {
       const { error } = await supabase.from('smtp_accounts' as any).delete().eq('id', id);
       if (error) throw error;
       toast({ title: 'SMTP account removed' });
+      fetchAll();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean }) => {
+    try {
+      const { error } = await supabase.from('smtp_accounts' as any).update(updates as any).eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Updated' });
+      fetchAll();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleResetSmtpCounters = async (id: string) => {
+    try {
+      const { error } = await supabase.from('smtp_accounts' as any).update({
+        emails_sent_today: 0,
+        emails_sent_this_hour: 0,
+        last_daily_reset: new Date().toISOString(),
+        last_hourly_reset: new Date().toISOString(),
+      } as any).eq('id', id);
+      if (error) throw error;
+      toast({ title: 'Counters reset' });
       fetchAll();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -499,34 +531,90 @@ export default function Settings() {
               </Card>
             ) : (
               <div className="grid gap-3">
-                {smtpAccounts.map(acct => (
-                  <Card key={acct.id} className="group">
-                    <CardContent className="flex items-center justify-between py-4 px-5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Server className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{acct.label}</span>
-                            {acct.is_default && (
-                              <Badge variant="secondary" className="text-xs"><Star className="h-3 w-3 mr-1" />Default</Badge>
-                            )}
+                {smtpAccounts.map(acct => {
+                  const dailyUsed = acct.emails_sent_today ?? 0;
+                  const dailyLimit = acct.daily_send_limit ?? 300;
+                  const hourlyUsed = acct.emails_sent_this_hour ?? 0;
+                  const hourlyLimit = acct.hourly_send_limit ?? 50;
+                  const dailyPct = Math.min(100, Math.round((dailyUsed / Math.max(1, dailyLimit)) * 100));
+                  return (
+                    <Card key={acct.id} className="group">
+                      <CardContent className="py-4 px-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                              <Server className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm truncate">{acct.label}</span>
+                                {acct.is_default && (
+                                  <Badge variant="secondary" className="text-xs"><Star className="h-3 w-3 mr-1" />Default</Badge>
+                                )}
+                                {acct.is_active === false && (
+                                  <Badge variant="outline" className="text-xs">Paused</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">{acct.smtp_username} · {acct.smtp_host}:{acct.smtp_port}</p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">{acct.smtp_username} · {acct.smtp_host}:{acct.smtp_port}</p>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {!acct.is_default && (
+                              <Button variant="ghost" size="sm" onClick={() => handleSetDefaultSmtp(acct.id)} className="text-xs">Set Default</Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteSmtp(acct.id)}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!acct.is_default && (
-                          <Button variant="ghost" size="sm" onClick={() => handleSetDefaultSmtp(acct.id)} className="text-xs">Set Default</Button>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteSmtp(acct.id)}>
-                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Daily limit</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              defaultValue={dailyLimit}
+                              className="h-8 text-sm"
+                              onBlur={(e) => {
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v) && v > 0 && v !== dailyLimit) handleUpdateSmtpLimits(acct.id, { daily_send_limit: v });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Hourly limit</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              defaultValue={hourlyLimit}
+                              className="h-8 text-sm"
+                              onBlur={(e) => {
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v) && v > 0 && v !== hourlyLimit) handleUpdateSmtpLimits(acct.id, { hourly_send_limit: v });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Today's usage</Label>
+                            <div className="text-sm font-medium">{dailyUsed} / {dailyLimit} <span className="text-xs text-muted-foreground">({hourlyUsed}/{hourlyLimit} this hour)</span></div>
+                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                              <div className={`h-full ${dailyPct >= 90 ? 'bg-destructive' : dailyPct >= 70 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${dailyPct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleUpdateSmtpLimits(acct.id, { is_active: !(acct.is_active ?? true) })}>
+                            {(acct.is_active ?? true) ? 'Pause account' : 'Resume account'}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleResetSmtpCounters(acct.id)}>
+                            Reset counters
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

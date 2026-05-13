@@ -533,6 +533,7 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('status', 'pending')
       .lt('attempt_count', MAX_ATTEMPTS)
+      .or(`scheduled_for.is.null,scheduled_for.lte.${new Date().toISOString()}`)
       .order('created_at', { ascending: true })
       .limit(BATCH_SIZE)
 
@@ -729,6 +730,21 @@ Deno.serve(async (req) => {
                     if (identity?.from_name) fromName = identity.from_name
                   }
                   fromNameCache.set(email.campaign_id, fromName)
+                }
+              }
+
+              // Reserve quota on the SMTP account before sending. If exhausted,
+              // push this email forward 1 hour so it retries after the hourly window.
+              if (email.smtp_account_id) {
+                const { data: reserved } = await supabase.rpc('reserve_smtp_quota', { _smtp_id: email.smtp_account_id })
+                if (reserved !== true) {
+                  const nextSlot = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+                  await supabase
+                    .from('email_queue')
+                    .update({ scheduled_for: nextSlot })
+                    .eq('id', email.id)
+                  console.log(`Quota exhausted for SMTP ${email.smtp_account_id}, deferred ${email.id} to ${nextSlot}`)
+                  continue
                 }
               }
 
