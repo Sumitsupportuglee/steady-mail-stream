@@ -84,6 +84,8 @@ export default function CampaignWizard() {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpAccount[]>([]);
   const [selectedIdentity, setSelectedIdentity] = useState('');
   const [selectedSmtp, setSelectedSmtp] = useState('');
+  const [smtpMode, setSmtpMode] = useState<'single' | 'rotation'>('single');
+  const [smtpPool, setSmtpPool] = useState<Set<string>>(new Set());
   const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
