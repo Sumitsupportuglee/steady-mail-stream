@@ -654,9 +654,11 @@ export default function CampaignWizard() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">
-                    <div className="text-sm text-muted-foreground">SMTP Account</div>
+                    <div className="text-sm text-muted-foreground">Sending</div>
                     <div className="font-medium mt-1">
-                      {smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected'}
+                      {smtpMode === 'rotation' && poolList.length >= 2
+                        ? `Rotation pool · ${poolList.length} accounts (${poolDailyCapacity}/day)`
+                        : (smtpAccounts.find(s => s.id === selectedSmtp)?.label || 'Not selected')}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg bg-muted">
