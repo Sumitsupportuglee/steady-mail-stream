@@ -211,8 +211,16 @@ export default function CampaignWizard() {
     setIsSubmitting(true);
 
     try {
-      const identity = identities.find(i => i.id === selectedIdentity);
-      if (!identity) throw new Error('No sender identity selected');
+      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
+
+      // Resolve sender identity:
+      //  - single mode: the user-picked identity (existing behavior)
+      //  - rotation mode: each SMTP account uses ITS OWN linked identity
+      //    (required to satisfy "Sender address rejected: not owned by user")
+      const identityById = new Map(identities.map(i => [i.id, i] as const));
+      const fallbackIdentity = identities.find(i => i.id === selectedIdentity)
+        ?? (useRotation ? identityById.get(poolList[0]?.sender_identity_id || '') : undefined);
+      if (!fallbackIdentity) throw new Error('No sender identity available');
 
       const allRecipients = audienceType === 'all'
         ? contacts
@@ -233,15 +241,16 @@ export default function CampaignWizard() {
         throw new Error('No valid recipients after filtering');
       }
 
-      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
       const poolIds = useRotation ? poolList.map(a => a.id) : null;
 
-      // Create campaign
+      // Create campaign — store fallback identity (used by single-mode and as
+      // a safety fallback). In rotation mode the queue processor overrides
+      // From per-email using the SMTP account's linked identity.
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .insert({
           user_id: user!.id,
-          sender_identity_id: selectedIdentity,
+          sender_identity_id: fallbackIdentity.id,
           subject,
           body_html: bodyHtml,
           status: 'queued',
