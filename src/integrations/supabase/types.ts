@@ -957,6 +957,7 @@ export type Database = {
           last_daily_reset: string
           last_hourly_reset: string
           provider: string
+          sender_identity_id: string | null
           smtp_encryption: string
           smtp_host: string
           smtp_password: string
@@ -979,6 +980,7 @@ export type Database = {
           last_daily_reset?: string
           last_hourly_reset?: string
           provider?: string
+          sender_identity_id?: string | null
           smtp_encryption?: string
           smtp_host: string
           smtp_password: string
@@ -1001,6 +1003,7 @@ export type Database = {
           last_daily_reset?: string
           last_hourly_reset?: string
           provider?: string
+          sender_identity_id?: string | null
           smtp_encryption?: string
           smtp_host?: string
           smtp_password?: string
@@ -1015,6 +1018,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smtp_accounts_sender_identity_id_fkey"
+            columns: ["sender_identity_id"]
+            isOneToOne: false
+            referencedRelation: "sender_identities"
             referencedColumns: ["id"]
           },
         ]
