@@ -235,7 +235,7 @@ export default function Settings() {
     }
   };
 
-  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean }) => {
+  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean; sender_identity_id?: string | null }) => {
     try {
       const { error } = await supabase.from('smtp_accounts' as any).update(updates as any).eq('id', id);
       if (error) throw error;
