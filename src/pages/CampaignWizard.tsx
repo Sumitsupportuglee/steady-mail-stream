@@ -183,10 +183,12 @@ export default function CampaignWizard() {
   const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
+  const poolMissingIdentity = poolList.filter(a => !a.sender_identity_id);
   const canProceedToStep3 =
-    selectedIdentity !== '' &&
     recipientCount > 0 &&
-    (smtpMode === 'single' ? selectedSmtp !== '' : poolList.length >= 2);
+    (smtpMode === 'single'
+      ? selectedIdentity !== '' && selectedSmtp !== ''
+      : poolList.length >= 2 && poolMissingIdentity.length === 0);
 
   const togglePool = (id: string) => {
     const next = new Set(smtpPool);
