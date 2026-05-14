@@ -282,6 +282,15 @@ export default function CampaignWizard() {
           ? poolIds![idx % poolIds!.length]
           : (selectedSmtp || null);
 
+        // Per-email From: rotation mode uses each SMTP's linked identity so
+        // the SMTP login is authorized to send From that address.
+        let fromEmailForRow = fallbackIdentity.from_email;
+        if (useRotation && smtpAccountId) {
+          const smtp = smtpAccounts.find(a => a.id === smtpAccountId);
+          const linked = smtp?.sender_identity_id ? identityById.get(smtp.sender_identity_id) : undefined;
+          if (linked) fromEmailForRow = linked.from_email;
+        }
+
         // Spread schedule. First batch sends immediately (scheduled_for = null).
         const scheduledFor = idx < (totalHourly || 50)
           ? null
@@ -291,7 +300,7 @@ export default function CampaignWizard() {
           user_id: user!.id,
           campaign_id: campaign.id,
           contact_id: contact.id,
-          from_email: identity.from_email,
+          from_email: fromEmailForRow,
           to_email: contact.email,
           subject,
           body: personalizedBody,
