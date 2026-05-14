@@ -436,36 +436,43 @@ export default function CampaignWizard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Sender Identity</Label>
-                <Select value={selectedIdentity} onValueChange={setSelectedIdentity}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select sender identity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {identities.map((identity) => (
-                      <SelectItem 
-                        key={identity.id} 
-                        value={identity.id}
-                        disabled={identity.domain_status === 'unverified'}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{identity.from_name} &lt;{identity.from_email}&gt;</span>
-                          {identity.domain_status === 'unverified' && (
-                            <Badge variant="secondary" className="text-xs">Unverified</Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {identities.length === 0 && (
-                  <p className="text-sm text-destructive flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    You need to add a sender identity first
-                  </p>
-                )}
-              </div>
+              {smtpMode === 'single' && (
+                <div className="space-y-2">
+                  <Label>Sender Identity</Label>
+                  <Select value={selectedIdentity} onValueChange={setSelectedIdentity}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sender identity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {identities.map((identity) => (
+                        <SelectItem
+                          key={identity.id}
+                          value={identity.id}
+                          disabled={identity.domain_status === 'unverified'}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{identity.from_name} &lt;{identity.from_email}&gt;</span>
+                            {identity.domain_status === 'unverified' && (
+                              <Badge variant="secondary" className="text-xs">Unverified</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {identities.length === 0 && (
+                    <p className="text-sm text-destructive flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      You need to add a sender identity first
+                    </p>
+                  )}
+                </div>
+              )}
+              {smtpMode === 'rotation' && (
+                <div className="rounded-md bg-muted/40 border p-3 text-xs text-muted-foreground">
+                  In rotation mode, each email is sent From the identity linked to the SMTP account that delivers it. Manage these links in Settings → SMTP Accounts.
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
