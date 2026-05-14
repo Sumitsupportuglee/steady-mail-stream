@@ -737,9 +737,11 @@ Deno.serve(async (req) => {
               const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
-              // Resolve sender display name (cached per campaign)
-              let fromName: string | undefined
-              if (email.campaign_id) {
+              // Resolve sender display name. If this batch's SMTP has a
+              // linked identity, prefer that name (rotation pool case).
+              // Otherwise fall back to the campaign's sender identity.
+              let fromName: string | undefined = linkedFromName ?? undefined
+              if (!fromName && email.campaign_id) {
                 if (fromNameCache.has(email.campaign_id)) {
                   fromName = fromNameCache.get(email.campaign_id)
                 } else {
@@ -775,8 +777,12 @@ Deno.serve(async (req) => {
                 }
               }
 
+              // Override From with SMTP-linked identity if present (rotation
+              // pool); otherwise use whatever was queued.
+              const effectiveFromEmail = linkedFromEmail || email.from_email
+
               await client.sendEmail(
-                email.from_email,
+                effectiveFromEmail,
                 email.to_email,
                 email.subject,
                 trackedBody,
