@@ -604,6 +604,32 @@ export default function Settings() {
                             </div>
                           </div>
                         </div>
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-xs text-muted-foreground">Send From identity</Label>
+                            <Select
+                              value={acct.sender_identity_id ?? 'none'}
+                              onValueChange={(v) => handleUpdateSmtpLimits(acct.id, { sender_identity_id: v === 'none' ? null : v })}
+                            >
+                              <SelectTrigger className="h-8 text-sm mt-1">
+                                <SelectValue placeholder="No identity linked" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No identity linked</SelectItem>
+                                {identities.map(idn => (
+                                  <SelectItem key={idn.id} value={idn.id}>
+                                    {idn.from_name} &lt;{idn.from_email}&gt;
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {!acct.sender_identity_id && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Link an identity that this SMTP login is allowed to send From — otherwise rotation will skip it.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                         <div className="flex items-center justify-end gap-2 pt-1">
                           <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleUpdateSmtpLimits(acct.id, { is_active: !(acct.is_active ?? true) })}>
                             {(acct.is_active ?? true) ? 'Pause account' : 'Resume account'}
