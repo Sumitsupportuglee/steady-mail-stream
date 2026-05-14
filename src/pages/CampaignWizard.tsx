@@ -62,6 +62,7 @@ interface SmtpAccount {
   emails_sent_today?: number;
   emails_sent_this_hour?: number;
   is_active?: boolean;
+  sender_identity_id?: string | null;
 }
 
 type WizardStep = 1 | 2 | 3;
