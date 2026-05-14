@@ -524,16 +524,29 @@ export default function CampaignWizard() {
                     {smtpAccounts.map((acct) => {
                       const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
                       const isInactive = acct.is_active === false;
+                      const linked = acct.sender_identity_id
+                        ? identities.find(i => i.id === acct.sender_identity_id)
+                        : undefined;
+                      const noIdentity = !linked;
+                      const disabled = isInactive || noIdentity;
                       return (
-                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-50' : ''}`}>
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${disabled ? 'opacity-60' : ''}`}>
                           <Checkbox
                             checked={smtpPool.has(acct.id)}
                             onCheckedChange={() => togglePool(acct.id)}
-                            disabled={isInactive}
+                            disabled={disabled}
                           />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">{acct.label}</div>
-                            <div className="text-xs text-muted-foreground truncate">{acct.smtp_username}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {acct.smtp_username}
+                              {linked && (
+                                <span className="ml-1">→ sends as <span className="text-foreground">{linked.from_email}</span></span>
+                              )}
+                            </div>
+                            {noIdentity && (
+                              <div className="text-xs text-destructive mt-0.5">No linked identity — add one in Settings → SMTP Accounts</div>
+                            )}
                           </div>
                           <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
                         </div>
