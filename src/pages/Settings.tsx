@@ -57,6 +57,7 @@ interface SmtpAccount {
   emails_sent_today?: number;
   emails_sent_this_hour?: number;
   is_active?: boolean;
+  sender_identity_id?: string | null;
 }
 
 interface SenderIdentity {
@@ -234,7 +235,7 @@ export default function Settings() {
     }
   };
 
-  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean }) => {
+  const handleUpdateSmtpLimits = async (id: string, updates: { daily_send_limit?: number; hourly_send_limit?: number; is_active?: boolean; sender_identity_id?: string | null }) => {
     try {
       const { error } = await supabase.from('smtp_accounts' as any).update(updates as any).eq('id', id);
       if (error) throw error;
@@ -601,6 +602,32 @@ export default function Settings() {
                             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                               <div className={`h-full ${dailyPct >= 90 ? 'bg-destructive' : dailyPct >= 70 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${dailyPct}%` }} />
                             </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-xs text-muted-foreground">Send From identity</Label>
+                            <Select
+                              value={acct.sender_identity_id ?? 'none'}
+                              onValueChange={(v) => handleUpdateSmtpLimits(acct.id, { sender_identity_id: v === 'none' ? null : v })}
+                            >
+                              <SelectTrigger className="h-8 text-sm mt-1">
+                                <SelectValue placeholder="No identity linked" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No identity linked</SelectItem>
+                                {identities.map(idn => (
+                                  <SelectItem key={idn.id} value={idn.id}>
+                                    {idn.from_name} &lt;{idn.from_email}&gt;
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {!acct.sender_identity_id && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Link an identity that this SMTP login is allowed to send From — otherwise rotation will skip it.
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center justify-end gap-2 pt-1">

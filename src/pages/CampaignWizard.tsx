@@ -62,6 +62,7 @@ interface SmtpAccount {
   emails_sent_today?: number;
   emails_sent_this_hour?: number;
   is_active?: boolean;
+  sender_identity_id?: string | null;
 }
 
 type WizardStep = 1 | 2 | 3;
@@ -114,7 +115,7 @@ export default function CampaignWizard() {
 
       const smtpQuery = supabase
         .from('smtp_accounts' as any)
-        .select('id, label, smtp_username, smtp_host, is_default, daily_send_limit, hourly_send_limit, emails_sent_today, emails_sent_this_hour, is_active')
+        .select('id, label, smtp_username, smtp_host, is_default, daily_send_limit, hourly_send_limit, emails_sent_today, emails_sent_this_hour, is_active, sender_identity_id')
         .eq('user_id', user!.id);
 
       let categoriesQuery = supabase
@@ -182,10 +183,12 @@ export default function CampaignWizard() {
   const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
+  const poolMissingIdentity = poolList.filter(a => !a.sender_identity_id);
   const canProceedToStep3 =
-    selectedIdentity !== '' &&
     recipientCount > 0 &&
-    (smtpMode === 'single' ? selectedSmtp !== '' : poolList.length >= 2);
+    (smtpMode === 'single'
+      ? selectedIdentity !== '' && selectedSmtp !== ''
+      : poolList.length >= 2 && poolMissingIdentity.length === 0);
 
   const togglePool = (id: string) => {
     const next = new Set(smtpPool);
@@ -198,8 +201,12 @@ export default function CampaignWizard() {
   useEffect(() => {
     if (shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2) {
       setSmtpMode('rotation');
-      // Pre-fill pool with all active accounts
-      setSmtpPool(new Set(smtpAccounts.filter(a => a.is_active ?? true).map(a => a.id)));
+      // Pre-fill pool with active accounts that already have a linked identity
+      setSmtpPool(new Set(
+        smtpAccounts
+          .filter(a => (a.is_active ?? true) && a.sender_identity_id)
+          .map(a => a.id)
+      ));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldUseRotation, smtpAccounts.length]);
@@ -208,8 +215,16 @@ export default function CampaignWizard() {
     setIsSubmitting(true);
 
     try {
-      const identity = identities.find(i => i.id === selectedIdentity);
-      if (!identity) throw new Error('No sender identity selected');
+      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
+
+      // Resolve sender identity:
+      //  - single mode: the user-picked identity (existing behavior)
+      //  - rotation mode: each SMTP account uses ITS OWN linked identity
+      //    (required to satisfy "Sender address rejected: not owned by user")
+      const identityById = new Map(identities.map(i => [i.id, i] as const));
+      const fallbackIdentity = identities.find(i => i.id === selectedIdentity)
+        ?? (useRotation ? identityById.get(poolList[0]?.sender_identity_id || '') : undefined);
+      if (!fallbackIdentity) throw new Error('No sender identity available');
 
       const allRecipients = audienceType === 'all'
         ? contacts
@@ -230,15 +245,16 @@ export default function CampaignWizard() {
         throw new Error('No valid recipients after filtering');
       }
 
-      const useRotation = smtpMode === 'rotation' && poolList.length >= 2;
       const poolIds = useRotation ? poolList.map(a => a.id) : null;
 
-      // Create campaign
+      // Create campaign — store fallback identity (used by single-mode and as
+      // a safety fallback). In rotation mode the queue processor overrides
+      // From per-email using the SMTP account's linked identity.
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .insert({
           user_id: user!.id,
-          sender_identity_id: selectedIdentity,
+          sender_identity_id: fallbackIdentity.id,
           subject,
           body_html: bodyHtml,
           status: 'queued',
@@ -270,6 +286,15 @@ export default function CampaignWizard() {
           ? poolIds![idx % poolIds!.length]
           : (selectedSmtp || null);
 
+        // Per-email From: rotation mode uses each SMTP's linked identity so
+        // the SMTP login is authorized to send From that address.
+        let fromEmailForRow = fallbackIdentity.from_email;
+        if (useRotation && smtpAccountId) {
+          const smtp = smtpAccounts.find(a => a.id === smtpAccountId);
+          const linked = smtp?.sender_identity_id ? identityById.get(smtp.sender_identity_id) : undefined;
+          if (linked) fromEmailForRow = linked.from_email;
+        }
+
         // Spread schedule. First batch sends immediately (scheduled_for = null).
         const scheduledFor = idx < (totalHourly || 50)
           ? null
@@ -279,7 +304,7 @@ export default function CampaignWizard() {
           user_id: user!.id,
           campaign_id: campaign.id,
           contact_id: contact.id,
-          from_email: identity.from_email,
+          from_email: fromEmailForRow,
           to_email: contact.email,
           subject,
           body: personalizedBody,
@@ -415,36 +440,43 @@ export default function CampaignWizard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Sender Identity</Label>
-                <Select value={selectedIdentity} onValueChange={setSelectedIdentity}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select sender identity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {identities.map((identity) => (
-                      <SelectItem 
-                        key={identity.id} 
-                        value={identity.id}
-                        disabled={identity.domain_status === 'unverified'}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{identity.from_name} &lt;{identity.from_email}&gt;</span>
-                          {identity.domain_status === 'unverified' && (
-                            <Badge variant="secondary" className="text-xs">Unverified</Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {identities.length === 0 && (
-                  <p className="text-sm text-destructive flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    You need to add a sender identity first
-                  </p>
-                )}
-              </div>
+              {smtpMode === 'single' && (
+                <div className="space-y-2">
+                  <Label>Sender Identity</Label>
+                  <Select value={selectedIdentity} onValueChange={setSelectedIdentity}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sender identity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {identities.map((identity) => (
+                        <SelectItem
+                          key={identity.id}
+                          value={identity.id}
+                          disabled={identity.domain_status === 'unverified'}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{identity.from_name} &lt;{identity.from_email}&gt;</span>
+                            {identity.domain_status === 'unverified' && (
+                              <Badge variant="secondary" className="text-xs">Unverified</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {identities.length === 0 && (
+                    <p className="text-sm text-destructive flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      You need to add a sender identity first
+                    </p>
+                  )}
+                </div>
+              )}
+              {smtpMode === 'rotation' && (
+                <div className="rounded-md bg-muted/40 border p-3 text-xs text-muted-foreground">
+                  In rotation mode, each email is sent From the identity linked to the SMTP account that delivers it. Manage these links in Settings → SMTP Accounts.
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -496,16 +528,29 @@ export default function CampaignWizard() {
                     {smtpAccounts.map((acct) => {
                       const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
                       const isInactive = acct.is_active === false;
+                      const linked = acct.sender_identity_id
+                        ? identities.find(i => i.id === acct.sender_identity_id)
+                        : undefined;
+                      const noIdentity = !linked;
+                      const disabled = isInactive || noIdentity;
                       return (
-                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-50' : ''}`}>
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${disabled ? 'opacity-60' : ''}`}>
                           <Checkbox
                             checked={smtpPool.has(acct.id)}
                             onCheckedChange={() => togglePool(acct.id)}
-                            disabled={isInactive}
+                            disabled={disabled}
                           />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">{acct.label}</div>
-                            <div className="text-xs text-muted-foreground truncate">{acct.smtp_username}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {acct.smtp_username}
+                              {linked && (
+                                <span className="ml-1">→ sends as <span className="text-foreground">{linked.from_email}</span></span>
+                              )}
+                            </div>
+                            {noIdentity && (
+                              <div className="text-xs text-destructive mt-0.5">No linked identity — add one in Settings → SMTP Accounts</div>
+                            )}
                           </div>
                           <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
                         </div>

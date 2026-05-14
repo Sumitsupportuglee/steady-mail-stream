@@ -587,6 +587,32 @@ Deno.serve(async (req) => {
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
 
+      // All emails in this `emails` array share the same SMTP account (grouped
+      // above). If that SMTP account has a linked sender identity, ALL outgoing
+      // From addresses in this batch must use it — otherwise providers like
+      // Zoho/cPanel reject with "553 Sender address rejected: not owned by user".
+      let linkedFromEmail: string | null = null
+      let linkedFromName: string | null = null
+      const sharedSmtpId = emails[0]?.smtp_account_id || null
+      if (sharedSmtpId) {
+        const { data: linkRow } = await supabase
+          .from('smtp_accounts')
+          .select('sender_identity_id')
+          .eq('id', sharedSmtpId)
+          .maybeSingle()
+        if (linkRow?.sender_identity_id) {
+          const { data: idn } = await supabase
+            .from('sender_identities')
+            .select('from_email, from_name')
+            .eq('id', linkRow.sender_identity_id)
+            .maybeSingle()
+          if (idn?.from_email) {
+            linkedFromEmail = idn.from_email
+            linkedFromName = idn.from_name || null
+          }
+        }
+      }
+
       // Track addresses we've already auto-suppressed in this run so we
       // skip duplicates without re-querying.
       const suppressedThisRun = new Set<string>()
@@ -602,7 +628,8 @@ Deno.serve(async (req) => {
         let client = new SmtpClient()
         // Use the sender's domain as EHLO hostname — many providers
         // reject or penalise "EHLO localhost".
-        const fromDomain = (chunk[0].from_email.match(/<(.+)>/)?.[1] || chunk[0].from_email).split('@')[1]
+        const effectiveFrom = linkedFromEmail || (chunk[0].from_email.match(/<(.+)>/)?.[1] || chunk[0].from_email)
+        const fromDomain = effectiveFrom.split('@')[1]
         if (fromDomain) client.setEhloHost(fromDomain)
         let connected = false
 
@@ -710,9 +737,11 @@ Deno.serve(async (req) => {
               const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
-              // Resolve sender display name (cached per campaign)
-              let fromName: string | undefined
-              if (email.campaign_id) {
+              // Resolve sender display name. If this batch's SMTP has a
+              // linked identity, prefer that name (rotation pool case).
+              // Otherwise fall back to the campaign's sender identity.
+              let fromName: string | undefined = linkedFromName ?? undefined
+              if (!fromName && email.campaign_id) {
                 if (fromNameCache.has(email.campaign_id)) {
                   fromName = fromNameCache.get(email.campaign_id)
                 } else {
@@ -748,8 +777,12 @@ Deno.serve(async (req) => {
                 }
               }
 
+              // Override From with SMTP-linked identity if present (rotation
+              // pool); otherwise use whatever was queued.
+              const effectiveFromEmail = linkedFromEmail || email.from_email
+
               await client.sendEmail(
-                email.from_email,
+                effectiveFromEmail,
                 email.to_email,
                 email.subject,
                 trackedBody,
