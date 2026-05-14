@@ -201,8 +201,12 @@ export default function CampaignWizard() {
   useEffect(() => {
     if (shouldUseRotation && smtpMode === 'single' && smtpAccounts.length >= 2) {
       setSmtpMode('rotation');
-      // Pre-fill pool with all active accounts
-      setSmtpPool(new Set(smtpAccounts.filter(a => a.is_active ?? true).map(a => a.id)));
+      // Pre-fill pool with active accounts that already have a linked identity
+      setSmtpPool(new Set(
+        smtpAccounts
+          .filter(a => (a.is_active ?? true) && a.sender_identity_id)
+          .map(a => a.id)
+      ));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldUseRotation, smtpAccounts.length]);
