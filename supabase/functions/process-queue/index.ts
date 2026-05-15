@@ -16,6 +16,7 @@ interface QueueItem {
   status: string
   attempt_count: number
   smtp_account_id: string | null
+  sender_identity_id?: string | null
 }
 
 interface SmtpConfig {
