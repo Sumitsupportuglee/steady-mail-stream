@@ -295,13 +295,17 @@ export default function CampaignWizard() {
           ? poolIds![idx % poolIds!.length]
           : (selectedSmtp || null);
 
-        // Per-email From: rotation mode uses each SMTP's linked identity so
-        // the SMTP login is authorized to send From that address.
+        // Per-email From: rotation mode uses each SMTP's effective identity
+        // (per-campaign override, falling back to the SMTP's linked identity).
         let fromEmailForRow = fallbackIdentity.from_email;
+        let identityIdForRow: string | null = useRotation ? null : fallbackIdentity.id;
         if (useRotation && smtpAccountId) {
-          const smtp = smtpAccounts.find(a => a.id === smtpAccountId);
-          const linked = smtp?.sender_identity_id ? identityById.get(smtp.sender_identity_id) : undefined;
-          if (linked) fromEmailForRow = linked.from_email;
+          const idId = effectiveIdentityFor(smtpAccountId);
+          const linked = idId ? identityById.get(idId) : undefined;
+          if (linked) {
+            fromEmailForRow = linked.from_email;
+            identityIdForRow = linked.id;
+          }
         }
 
         // Spread schedule. First batch sends immediately (scheduled_for = null).
@@ -319,6 +323,7 @@ export default function CampaignWizard() {
           body: personalizedBody,
           status: 'pending' as const,
           smtp_account_id: smtpAccountId,
+          sender_identity_id: identityIdForRow,
           scheduled_for: scheduledFor,
         } as any;
       });
