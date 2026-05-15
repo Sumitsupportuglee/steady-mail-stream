@@ -587,6 +587,19 @@ Deno.serve(async (req) => {
 
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
+      // Cache per-email-row identity overrides (id -> { from_email, from_name })
+      const identityCache = new Map<string, { from_email: string; from_name: string | null }>()
+      const resolveIdentity = async (id: string) => {
+        if (identityCache.has(id)) return identityCache.get(id)!
+        const { data } = await supabase
+          .from('sender_identities')
+          .select('from_email, from_name')
+          .eq('id', id)
+          .maybeSingle()
+        const v = data?.from_email ? { from_email: data.from_email, from_name: data.from_name || null } : null
+        if (v) identityCache.set(id, v)
+        return v
+      }
 
       // All emails in this `emails` array share the same SMTP account (grouped
       // above). If that SMTP account has a linked sender identity, ALL outgoing
