@@ -29,12 +29,20 @@ interface SmtpConfig {
 
 // --- SMTP CLIENT (Raw TCP for Deno) ---
 
+// Sender-side authorization failure (server rejected our MAIL FROM because
+// the SMTP login isn't allowed to send AS that address). NOT a recipient
+// problem — must not be auto-suppressed.
+export function isSenderAuthError(msg: string): boolean {
+  return /not owned by user|sender address rejected|sender not allowed|not authori[sz]ed (to send|as)|cannot send (as|from)|from address (not )?(allowed|permitted)/i.test(msg)
+}
+
 // Permanent recipient errors → suppress the address.
 // Anything 5xx on RCPT TO that we should NOT retry.
 export function isPermanentRecipientError(msg: string): boolean {
+  if (isSenderAuthError(msg)) return false
   return /\b5\d{2}\b/.test(msg) && (
-    /no such user|user unknown|mailbox unavailable|invalid mailbox|address rejected|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
-    || /\b550\b|\b551\b|\b553\b|\b554\b/.test(msg)
+    /no such user|user unknown|mailbox unavailable|invalid mailbox|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
+    || /\b550\b|\b551\b|\b554\b/.test(msg)
   )
 }
 
@@ -607,13 +615,17 @@ Deno.serve(async (req) => {
       // Zoho/cPanel reject with "553 Sender address rejected: not owned by user".
       let linkedFromEmail: string | null = null
       let linkedFromName: string | null = null
+      let smtpLoginEmail: string | null = null
       const sharedSmtpId = emails[0]?.smtp_account_id || null
       if (sharedSmtpId) {
         const { data: linkRow } = await supabase
           .from('smtp_accounts')
-          .select('sender_identity_id')
+          .select('sender_identity_id, smtp_username')
           .eq('id', sharedSmtpId)
           .maybeSingle()
+        if (linkRow?.smtp_username && /@/.test(linkRow.smtp_username)) {
+          smtpLoginEmail = linkRow.smtp_username.toLowerCase()
+        }
         if (linkRow?.sender_identity_id) {
           const { data: idn } = await supabase
             .from('sender_identities')
@@ -802,7 +814,18 @@ Deno.serve(async (req) => {
               }
 
               // Per-row override > SMTP-linked > queued from_email
-              const effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
+              let effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
+              // SAFETY: most providers (Zoho, Google, cPanel) only allow MAIL FROM
+              // to match the SMTP login mailbox. If the resolved From address
+              // doesn't match smtp_username, override it to avoid 553 "Sender
+              // address rejected: not owned by user" rejections.
+              if (smtpLoginEmail) {
+                const fromAddr = (effectiveFromEmail.match(/<(.+)>/)?.[1] || effectiveFromEmail).toLowerCase()
+                if (fromAddr !== smtpLoginEmail) {
+                  console.warn(`From mismatch: ${fromAddr} not owned by SMTP login ${smtpLoginEmail}; forcing From=${smtpLoginEmail}`)
+                  effectiveFromEmail = smtpLoginEmail
+                }
+              }
 
               await client.sendEmail(
                 effectiveFromEmail,
@@ -846,6 +869,23 @@ Deno.serve(async (req) => {
                   .eq('id', email.id)
                 errorCount++
                 break
+              }
+
+              // 1b) Sender-authorization error (e.g. 553 "not owned by user").
+              // This is an SMTP↔identity misconfiguration — the recipient is
+              // fine. Mark failed with a clear hint and DO NOT suppress.
+              if (isSenderAuthError(errMsg)) {
+                const friendly = `SMTP login is not authorized to send From this address. Open Settings → SMTP Accounts and link a sender identity whose email matches the SMTP login. (${errMsg.slice(0, 180)})`
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: friendly,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
               }
 
               // 2) Permanent recipient bounce → auto-suppress this address.
