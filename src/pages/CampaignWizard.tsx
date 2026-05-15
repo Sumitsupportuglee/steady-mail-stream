@@ -189,7 +189,10 @@ export default function CampaignWizard() {
   const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const poolMissingIdentity = poolList.filter(a => !a.sender_identity_id);
+  // Effective identity per SMTP = override (if set) || account's linked identity
+  const effectiveIdentityFor = (smtpId: string) =>
+    smtpIdentityOverrides[smtpId] || smtpAccounts.find(a => a.id === smtpId)?.sender_identity_id || '';
+  const poolMissingIdentity = poolList.filter(a => !effectiveIdentityFor(a.id));
   const canProceedToStep3 =
     recipientCount > 0 &&
     (smtpMode === 'single'
