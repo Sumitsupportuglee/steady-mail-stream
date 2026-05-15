@@ -751,10 +751,20 @@ Deno.serve(async (req) => {
               const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
-              // Resolve sender display name. If this batch's SMTP has a
-              // linked identity, prefer that name (rotation pool case).
-              // Otherwise fall back to the campaign's sender identity.
-              let fromName: string | undefined = linkedFromName ?? undefined
+              // Resolve per-email identity override first (rotation pool with
+              // user-picked identity per SMTP). Falls back to the SMTP-linked
+              // identity, then to the campaign's identity.
+              let perRowFromEmail: string | null = null
+              let perRowFromName: string | null = null
+              if (email.sender_identity_id) {
+                const idn = await resolveIdentity(email.sender_identity_id)
+                if (idn) {
+                  perRowFromEmail = idn.from_email
+                  perRowFromName = idn.from_name
+                }
+              }
+
+              let fromName: string | undefined = perRowFromName ?? linkedFromName ?? undefined
               if (!fromName && email.campaign_id) {
                 if (fromNameCache.has(email.campaign_id)) {
                   fromName = fromNameCache.get(email.campaign_id)
@@ -791,9 +801,8 @@ Deno.serve(async (req) => {
                 }
               }
 
-              // Override From with SMTP-linked identity if present (rotation
-              // pool); otherwise use whatever was queued.
-              const effectiveFromEmail = linkedFromEmail || email.from_email
+              // Per-row override > SMTP-linked > queued from_email
+              const effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
 
               await client.sendEmail(
                 effectiveFromEmail,
