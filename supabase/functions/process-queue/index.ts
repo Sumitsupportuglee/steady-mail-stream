@@ -29,12 +29,20 @@ interface SmtpConfig {
 
 // --- SMTP CLIENT (Raw TCP for Deno) ---
 
+// Sender-side authorization failure (server rejected our MAIL FROM because
+// the SMTP login isn't allowed to send AS that address). NOT a recipient
+// problem — must not be auto-suppressed.
+export function isSenderAuthError(msg: string): boolean {
+  return /not owned by user|sender address rejected|sender not allowed|not authori[sz]ed (to send|as)|cannot send (as|from)|from address (not )?(allowed|permitted)/i.test(msg)
+}
+
 // Permanent recipient errors → suppress the address.
 // Anything 5xx on RCPT TO that we should NOT retry.
 export function isPermanentRecipientError(msg: string): boolean {
+  if (isSenderAuthError(msg)) return false
   return /\b5\d{2}\b/.test(msg) && (
-    /no such user|user unknown|mailbox unavailable|invalid mailbox|address rejected|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
-    || /\b550\b|\b551\b|\b553\b|\b554\b/.test(msg)
+    /no such user|user unknown|mailbox unavailable|invalid mailbox|recipient (address )?rejected|invalid dns mx|no mx|relay (access )?denied|relaying denied|does not exist|account.*disabled|not our customer/i.test(msg)
+    || /\b550\b|\b551\b|\b554\b/.test(msg)
   )
 }
 
