@@ -814,7 +814,18 @@ Deno.serve(async (req) => {
               }
 
               // Per-row override > SMTP-linked > queued from_email
-              const effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
+              let effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
+              // SAFETY: most providers (Zoho, Google, cPanel) only allow MAIL FROM
+              // to match the SMTP login mailbox. If the resolved From address
+              // doesn't match smtp_username, override it to avoid 553 "Sender
+              // address rejected: not owned by user" rejections.
+              if (smtpLoginEmail) {
+                const fromAddr = (effectiveFromEmail.match(/<(.+)>/)?.[1] || effectiveFromEmail).toLowerCase()
+                if (fromAddr !== smtpLoginEmail) {
+                  console.warn(`From mismatch: ${fromAddr} not owned by SMTP login ${smtpLoginEmail}; forcing From=${smtpLoginEmail}`)
+                  effectiveFromEmail = smtpLoginEmail
+                }
+              }
 
               await client.sendEmail(
                 effectiveFromEmail,
