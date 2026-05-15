@@ -87,6 +87,8 @@ export default function CampaignWizard() {
   const [selectedSmtp, setSelectedSmtp] = useState('');
   const [smtpMode, setSmtpMode] = useState<'single' | 'rotation'>('single');
   const [smtpPool, setSmtpPool] = useState<Set<string>>(new Set());
+  // Per-SMTP sender identity override for rotation mode (smtpId -> identityId)
+  const [smtpIdentityOverrides, setSmtpIdentityOverrides] = useState<Record<string, string>>({});
   const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
