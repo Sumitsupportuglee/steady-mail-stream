@@ -615,13 +615,17 @@ Deno.serve(async (req) => {
       // Zoho/cPanel reject with "553 Sender address rejected: not owned by user".
       let linkedFromEmail: string | null = null
       let linkedFromName: string | null = null
+      let smtpLoginEmail: string | null = null
       const sharedSmtpId = emails[0]?.smtp_account_id || null
       if (sharedSmtpId) {
         const { data: linkRow } = await supabase
           .from('smtp_accounts')
-          .select('sender_identity_id')
+          .select('sender_identity_id, smtp_username')
           .eq('id', sharedSmtpId)
           .maybeSingle()
+        if (linkRow?.smtp_username && /@/.test(linkRow.smtp_username)) {
+          smtpLoginEmail = linkRow.smtp_username.toLowerCase()
+        }
         if (linkRow?.sender_identity_id) {
           const { data: idn } = await supabase
             .from('sender_identities')
