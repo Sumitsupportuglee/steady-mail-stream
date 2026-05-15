@@ -871,6 +871,23 @@ Deno.serve(async (req) => {
                 break
               }
 
+              // 1b) Sender-authorization error (e.g. 553 "not owned by user").
+              // This is an SMTP↔identity misconfiguration — the recipient is
+              // fine. Mark failed with a clear hint and DO NOT suppress.
+              if (isSenderAuthError(errMsg)) {
+                const friendly = `SMTP login is not authorized to send From this address. Open Settings → SMTP Accounts and link a sender identity whose email matches the SMTP login. (${errMsg.slice(0, 180)})`
+                await supabase
+                  .from('email_queue')
+                  .update({
+                    status: 'failed',
+                    attempt_count: (email.attempt_count || 0) + 1,
+                    error_log: friendly,
+                  })
+                  .eq('id', email.id)
+                errorCount++
+                continue
+              }
+
               // 2) Permanent recipient bounce → auto-suppress this address.
               const isPermRcpt = /RCPT TO failed/i.test(errMsg) && isPermanentRecipientError(errMsg)
               if (isPermRcpt) {
