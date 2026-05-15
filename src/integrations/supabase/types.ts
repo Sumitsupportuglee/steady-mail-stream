@@ -468,6 +468,7 @@ export type Database = {
           from_email: string
           id: string
           scheduled_for: string | null
+          sender_identity_id: string | null
           sent_at: string | null
           smtp_account_id: string | null
           status: Database["public"]["Enums"]["email_status_type"] | null
@@ -485,6 +486,7 @@ export type Database = {
           from_email: string
           id?: string
           scheduled_for?: string | null
+          sender_identity_id?: string | null
           sent_at?: string | null
           smtp_account_id?: string | null
           status?: Database["public"]["Enums"]["email_status_type"] | null
@@ -502,6 +504,7 @@ export type Database = {
           from_email?: string
           id?: string
           scheduled_for?: string | null
+          sender_identity_id?: string | null
           sent_at?: string | null
           smtp_account_id?: string | null
           status?: Database["public"]["Enums"]["email_status_type"] | null
@@ -522,6 +525,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_sender_identity_id_fkey"
+            columns: ["sender_identity_id"]
+            isOneToOne: false
+            referencedRelation: "sender_identities"
             referencedColumns: ["id"]
           },
           {

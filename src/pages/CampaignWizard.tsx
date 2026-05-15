@@ -87,6 +87,8 @@ export default function CampaignWizard() {
   const [selectedSmtp, setSelectedSmtp] = useState('');
   const [smtpMode, setSmtpMode] = useState<'single' | 'rotation'>('single');
   const [smtpPool, setSmtpPool] = useState<Set<string>>(new Set());
+  // Per-SMTP sender identity override for rotation mode (smtpId -> identityId)
+  const [smtpIdentityOverrides, setSmtpIdentityOverrides] = useState<Record<string, string>>({});
   const [audienceType, setAudienceType] = useState<'all' | 'category' | 'selected'>('all');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
@@ -134,6 +136,10 @@ export default function CampaignWizard() {
       setCategories((categoriesRes.data as Category[]) || []);
       const smtpData = (smtpRes.data as any[]) || [];
       setSmtpAccounts(smtpData);
+      // Seed per-SMTP identity overrides from each account's linked identity
+      const seeded: Record<string, string> = {};
+      smtpData.forEach((s: any) => { if (s.sender_identity_id) seeded[s.id] = s.sender_identity_id; });
+      setSmtpIdentityOverrides(seeded);
       // Auto-select default SMTP
       const defaultSmtp = smtpData.find((s: any) => s.is_default);
       if (defaultSmtp) setSelectedSmtp(defaultSmtp.id);
@@ -183,7 +189,10 @@ export default function CampaignWizard() {
   const poolHourlyCapacity = poolList.reduce((s, a) => s + Math.max(0, (a.hourly_send_limit ?? 50) - (a.emails_sent_this_hour ?? 0)), 0);
 
   const canProceedToStep2 = subject.trim() !== '' && bodyHtml.trim() !== '';
-  const poolMissingIdentity = poolList.filter(a => !a.sender_identity_id);
+  // Effective identity per SMTP = override (if set) || account's linked identity
+  const effectiveIdentityFor = (smtpId: string) =>
+    smtpIdentityOverrides[smtpId] || smtpAccounts.find(a => a.id === smtpId)?.sender_identity_id || '';
+  const poolMissingIdentity = poolList.filter(a => !effectiveIdentityFor(a.id));
   const canProceedToStep3 =
     recipientCount > 0 &&
     (smtpMode === 'single'
@@ -286,13 +295,17 @@ export default function CampaignWizard() {
           ? poolIds![idx % poolIds!.length]
           : (selectedSmtp || null);
 
-        // Per-email From: rotation mode uses each SMTP's linked identity so
-        // the SMTP login is authorized to send From that address.
+        // Per-email From: rotation mode uses each SMTP's effective identity
+        // (per-campaign override, falling back to the SMTP's linked identity).
         let fromEmailForRow = fallbackIdentity.from_email;
+        let identityIdForRow: string | null = useRotation ? null : fallbackIdentity.id;
         if (useRotation && smtpAccountId) {
-          const smtp = smtpAccounts.find(a => a.id === smtpAccountId);
-          const linked = smtp?.sender_identity_id ? identityById.get(smtp.sender_identity_id) : undefined;
-          if (linked) fromEmailForRow = linked.from_email;
+          const idId = effectiveIdentityFor(smtpAccountId);
+          const linked = idId ? identityById.get(idId) : undefined;
+          if (linked) {
+            fromEmailForRow = linked.from_email;
+            identityIdForRow = linked.id;
+          }
         }
 
         // Spread schedule. First batch sends immediately (scheduled_for = null).
@@ -310,6 +323,7 @@ export default function CampaignWizard() {
           body: personalizedBody,
           status: 'pending' as const,
           smtp_account_id: smtpAccountId,
+          sender_identity_id: identityIdForRow,
           scheduled_for: scheduledFor,
         } as any;
       });
@@ -528,31 +542,48 @@ export default function CampaignWizard() {
                     {smtpAccounts.map((acct) => {
                       const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
                       const isInactive = acct.is_active === false;
-                      const linked = acct.sender_identity_id
-                        ? identities.find(i => i.id === acct.sender_identity_id)
-                        : undefined;
-                      const noIdentity = !linked;
-                      const disabled = isInactive || noIdentity;
+                      const effectiveId = effectiveIdentityFor(acct.id);
+                      const effective = effectiveId ? identities.find(i => i.id === effectiveId) : undefined;
+                      const noIdentity = !effective;
+                      const disabled = isInactive || (noIdentity && identities.length === 0);
+                      const isChecked = smtpPool.has(acct.id);
                       return (
-                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${disabled ? 'opacity-60' : ''}`}>
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-60' : ''}`}>
                           <Checkbox
-                            checked={smtpPool.has(acct.id)}
+                            checked={isChecked}
                             onCheckedChange={() => togglePool(acct.id)}
                             disabled={disabled}
                           />
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 space-y-1">
                             <div className="font-medium text-sm truncate">{acct.label}</div>
                             <div className="text-xs text-muted-foreground truncate">
                               {acct.smtp_username}
-                              {linked && (
-                                <span className="ml-1">→ sends as <span className="text-foreground">{linked.from_email}</span></span>
+                              {effective && (
+                                <span className="ml-1">→ sends as <span className="text-foreground">{effective.from_email}</span></span>
                               )}
                             </div>
-                            {noIdentity && (
-                              <div className="text-xs text-destructive mt-0.5">No linked identity — add one in Settings → SMTP Accounts</div>
+                            {isChecked && (
+                              <Select
+                                value={effectiveId || ''}
+                                onValueChange={(v) => setSmtpIdentityOverrides(prev => ({ ...prev, [acct.id]: v }))}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Choose sender identity for this SMTP" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {identities.map((idn) => (
+                                    <SelectItem key={idn.id} value={idn.id}>
+                                      {idn.from_name ? `${idn.from_name} <${idn.from_email}>` : idn.from_email}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            {isChecked && noIdentity && (
+                              <div className="text-xs text-destructive">Pick a sender identity for this SMTP</div>
                             )}
                           </div>
-                          <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
+                          <Badge variant="secondary" className="text-xs whitespace-nowrap">{dailyLeft} left today</Badge>
                         </div>
                       );
                     })}

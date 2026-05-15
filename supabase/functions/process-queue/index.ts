@@ -16,6 +16,7 @@ interface QueueItem {
   status: string
   attempt_count: number
   smtp_account_id: string | null
+  sender_identity_id?: string | null
 }
 
 interface SmtpConfig {
@@ -586,6 +587,19 @@ Deno.serve(async (req) => {
 
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
+      // Cache per-email-row identity overrides (id -> { from_email, from_name })
+      const identityCache = new Map<string, { from_email: string; from_name: string | null }>()
+      const resolveIdentity = async (id: string) => {
+        if (identityCache.has(id)) return identityCache.get(id)!
+        const { data } = await supabase
+          .from('sender_identities')
+          .select('from_email, from_name')
+          .eq('id', id)
+          .maybeSingle()
+        const v = data?.from_email ? { from_email: data.from_email, from_name: data.from_name || null } : null
+        if (v) identityCache.set(id, v)
+        return v
+      }
 
       // All emails in this `emails` array share the same SMTP account (grouped
       // above). If that SMTP account has a linked sender identity, ALL outgoing
@@ -737,10 +751,20 @@ Deno.serve(async (req) => {
               const unsubFunctionUrl = buildUnsubscribeFunctionUrl(supabaseUrl, email.id, token)
               const trackedBody = injectTracking(email.body, email.id, supabaseUrl, unsubUrl)
 
-              // Resolve sender display name. If this batch's SMTP has a
-              // linked identity, prefer that name (rotation pool case).
-              // Otherwise fall back to the campaign's sender identity.
-              let fromName: string | undefined = linkedFromName ?? undefined
+              // Resolve per-email identity override first (rotation pool with
+              // user-picked identity per SMTP). Falls back to the SMTP-linked
+              // identity, then to the campaign's identity.
+              let perRowFromEmail: string | null = null
+              let perRowFromName: string | null = null
+              if (email.sender_identity_id) {
+                const idn = await resolveIdentity(email.sender_identity_id)
+                if (idn) {
+                  perRowFromEmail = idn.from_email
+                  perRowFromName = idn.from_name
+                }
+              }
+
+              let fromName: string | undefined = perRowFromName ?? linkedFromName ?? undefined
               if (!fromName && email.campaign_id) {
                 if (fromNameCache.has(email.campaign_id)) {
                   fromName = fromNameCache.get(email.campaign_id)
@@ -777,9 +801,8 @@ Deno.serve(async (req) => {
                 }
               }
 
-              // Override From with SMTP-linked identity if present (rotation
-              // pool); otherwise use whatever was queued.
-              const effectiveFromEmail = linkedFromEmail || email.from_email
+              // Per-row override > SMTP-linked > queued from_email
+              const effectiveFromEmail = perRowFromEmail || linkedFromEmail || email.from_email
 
               await client.sendEmail(
                 effectiveFromEmail,
