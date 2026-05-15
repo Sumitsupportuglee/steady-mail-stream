@@ -136,6 +136,10 @@ export default function CampaignWizard() {
       setCategories((categoriesRes.data as Category[]) || []);
       const smtpData = (smtpRes.data as any[]) || [];
       setSmtpAccounts(smtpData);
+      // Seed per-SMTP identity overrides from each account's linked identity
+      const seeded: Record<string, string> = {};
+      smtpData.forEach((s: any) => { if (s.sender_identity_id) seeded[s.id] = s.sender_identity_id; });
+      setSmtpIdentityOverrides(seeded);
       // Auto-select default SMTP
       const defaultSmtp = smtpData.find((s: any) => s.is_default);
       if (defaultSmtp) setSelectedSmtp(defaultSmtp.id);
