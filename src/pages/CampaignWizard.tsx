@@ -542,31 +542,48 @@ export default function CampaignWizard() {
                     {smtpAccounts.map((acct) => {
                       const dailyLeft = Math.max(0, (acct.daily_send_limit ?? 300) - (acct.emails_sent_today ?? 0));
                       const isInactive = acct.is_active === false;
-                      const linked = acct.sender_identity_id
-                        ? identities.find(i => i.id === acct.sender_identity_id)
-                        : undefined;
-                      const noIdentity = !linked;
-                      const disabled = isInactive || noIdentity;
+                      const effectiveId = effectiveIdentityFor(acct.id);
+                      const effective = effectiveId ? identities.find(i => i.id === effectiveId) : undefined;
+                      const noIdentity = !effective;
+                      const disabled = isInactive || (noIdentity && identities.length === 0);
+                      const isChecked = smtpPool.has(acct.id);
                       return (
-                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${disabled ? 'opacity-60' : ''}`}>
+                        <div key={acct.id} className={`flex items-center gap-3 p-2 rounded hover:bg-muted/50 ${isInactive ? 'opacity-60' : ''}`}>
                           <Checkbox
-                            checked={smtpPool.has(acct.id)}
+                            checked={isChecked}
                             onCheckedChange={() => togglePool(acct.id)}
                             disabled={disabled}
                           />
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 space-y-1">
                             <div className="font-medium text-sm truncate">{acct.label}</div>
                             <div className="text-xs text-muted-foreground truncate">
                               {acct.smtp_username}
-                              {linked && (
-                                <span className="ml-1">→ sends as <span className="text-foreground">{linked.from_email}</span></span>
+                              {effective && (
+                                <span className="ml-1">→ sends as <span className="text-foreground">{effective.from_email}</span></span>
                               )}
                             </div>
-                            {noIdentity && (
-                              <div className="text-xs text-destructive mt-0.5">No linked identity — add one in Settings → SMTP Accounts</div>
+                            {isChecked && (
+                              <Select
+                                value={effectiveId || ''}
+                                onValueChange={(v) => setSmtpIdentityOverrides(prev => ({ ...prev, [acct.id]: v }))}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Choose sender identity for this SMTP" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {identities.map((idn) => (
+                                    <SelectItem key={idn.id} value={idn.id}>
+                                      {idn.from_name ? `${idn.from_name} <${idn.from_email}>` : idn.from_email}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            {isChecked && noIdentity && (
+                              <div className="text-xs text-destructive">Pick a sender identity for this SMTP</div>
                             )}
                           </div>
-                          <Badge variant="secondary" className="text-xs">{dailyLeft} left today</Badge>
+                          <Badge variant="secondary" className="text-xs whitespace-nowrap">{dailyLeft} left today</Badge>
                         </div>
                       );
                     })}
