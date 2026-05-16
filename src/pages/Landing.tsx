@@ -18,6 +18,8 @@ import {
   Send,
   Target,
   Clock,
+  Shuffle,
+  Sparkles,
 } from 'lucide-react';
 
 const features = [
