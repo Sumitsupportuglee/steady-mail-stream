@@ -161,6 +161,30 @@ export default function Landing() {
             primary inbox — all from one dashboard.
           </p>
 
+          {/* New feature highlight: SMTP rotation pool */}
+          <div className="mx-auto mt-8 max-w-2xl">
+            <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-[1px] shadow-lg shadow-primary/10">
+              <div className="relative flex flex-col items-center gap-3 rounded-2xl bg-background/80 px-5 py-4 backdrop-blur sm:flex-row sm:text-left">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <Shuffle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-center gap-2 sm:justify-start">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      <Sparkles className="h-3 w-3" /> New
+                    </span>
+                    <span className="text-sm font-semibold text-foreground">
+                      SMTP Rotation Pool
+                    </span>
+                  </div>
+                  <p className="mt-1 text-center text-sm text-muted-foreground sm:text-left">
+                    Send bulk volume safely — we auto-rotate across multiple SMTP accounts &amp; matching sender identities to avoid spikes and stay under provider limits.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" className="h-12 px-8 text-base" asChild>
               <Link to="/auth">
