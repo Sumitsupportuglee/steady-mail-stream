@@ -59,6 +59,13 @@ const features = [
     description:
       'Manage multiple sender identities and domains from one dashboard. Switch between brands effortlessly.',
   },
+  {
+    icon: Shuffle,
+    title: 'SMTP Rotation Pool',
+    badge: 'New',
+    description:
+      'Send bulk volume safely. Auto-rotate across multiple SMTP accounts with matching sender identities — no spikes, no provider limit hits.',
+  },
 ];
 
 const stats = [
@@ -230,7 +237,14 @@ export default function Landing() {
                 <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
                   <feature.icon className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold">{feature.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">{feature.title}</h3>
+                  {('badge' in feature) && feature.badge && (
+                    <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      {feature.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {feature.description}
                 </p>
