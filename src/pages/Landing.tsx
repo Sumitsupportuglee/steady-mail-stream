@@ -59,6 +59,13 @@ const features = [
     description:
       'Manage multiple sender identities and domains from one dashboard. Switch between brands effortlessly.',
   },
+  {
+    icon: Shuffle,
+    title: 'SMTP Rotation Pool',
+    badge: 'New',
+    description:
+      'Send bulk volume safely. Auto-rotate across multiple SMTP accounts with matching sender identities — no spikes, no provider limit hits.',
+  },
 ];
 
 const stats = [
