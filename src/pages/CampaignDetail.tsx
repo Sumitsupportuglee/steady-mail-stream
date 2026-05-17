@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   ArrowLeft, 
   Loader2, 
@@ -15,7 +16,8 @@ import {
   MousePointerClick,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Shuffle
 } from 'lucide-react';
 
 interface Campaign {
@@ -25,10 +27,21 @@ interface Campaign {
   status: 'draft' | 'queued' | 'sending' | 'completed';
   recipient_count: number;
   created_at: string;
+  smtp_rotation_pool: string[] | null;
   sender_identities: {
     from_name: string;
     from_email: string;
   } | null;
+}
+
+interface RotationStat {
+  id: string;
+  label: string;
+  fromEmail: string;
+  sent: number;
+  pending: number;
+  failed: number;
+  share: number;
 }
 
 interface EmailStats {
