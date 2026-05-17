@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   ArrowLeft, 
   Loader2, 
@@ -15,7 +16,8 @@ import {
   MousePointerClick,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Shuffle
 } from 'lucide-react';
 
 interface Campaign {
@@ -25,10 +27,21 @@ interface Campaign {
   status: 'draft' | 'queued' | 'sending' | 'completed';
   recipient_count: number;
   created_at: string;
+  smtp_rotation_pool: string[] | null;
   sender_identities: {
     from_name: string;
     from_email: string;
   } | null;
+}
+
+interface RotationStat {
+  id: string;
+  label: string;
+  fromEmail: string;
+  sent: number;
+  pending: number;
+  failed: number;
+  share: number;
 }
 
 interface EmailStats {
@@ -53,12 +66,21 @@ export default function CampaignDetail() {
   const [trackingStats, setTrackingStats] = useState<TrackingStats>({ opens: 0, clicks: 0, openRate: 0, clickRate: 0 });
   const [loading, setLoading] = useState(true);
   const [failedErrors, setFailedErrors] = useState<string[]>([]);
+  const [rotationStats, setRotationStats] = useState<RotationStat[]>([]);
 
   useEffect(() => {
     if (user && id) {
       fetchCampaignData();
     }
   }, [user, id]);
+
+  // Poll for live updates while the campaign is actively sending
+  useEffect(() => {
+    if (!user || !id) return;
+    if (campaign?.status !== 'queued' && campaign?.status !== 'sending') return;
+    const interval = setInterval(() => fetchCampaignData(), 5000);
+    return () => clearInterval(interval);
+  }, [user, id, campaign?.status]);
 
   const fetchCampaignData = async () => {
     try {
@@ -77,12 +99,12 @@ export default function CampaignDetail() {
         .single();
 
       if (campaignError) throw campaignError;
-      setCampaign(campaignData);
+      setCampaign(campaignData as any);
 
       // Fetch email queue stats with error details
       const { data: queueData } = await supabase
         .from('email_queue')
-        .select('status, error_log')
+        .select('status, error_log, smtp_account_id')
         .eq('campaign_id', id);
 
       if (queueData) {
@@ -93,9 +115,7 @@ export default function CampaignDetail() {
           failed: queueData.filter(e => e.status === 'failed').length,
         };
         setEmailStats(stats);
-        
-        // Group identical errors with counts so the panel stays actionable
-        // even when hundreds of recipients hit the same SMTP problem.
+
         const errorCounts = new Map<string, number>();
         for (const e of queueData) {
           if (e.status === 'failed' && e.error_log) {
@@ -107,6 +127,43 @@ export default function CampaignDetail() {
           .sort((a, b) => b[1] - a[1])
           .map(([msg, count]) => (count > 1 ? `[${count}×] ${msg}` : msg));
         setFailedErrors(grouped);
+
+        // Rotation pool per-account distribution
+        const pool = (campaignData as any)?.smtp_rotation_pool as string[] | null;
+        if (pool && pool.length > 1) {
+          const perAccount = new Map<string, { sent: number; pending: number; failed: number }>();
+          for (const pid of pool) perAccount.set(pid, { sent: 0, pending: 0, failed: 0 });
+          for (const row of queueData) {
+            const key = row.smtp_account_id ?? 'unassigned';
+            const agg = perAccount.get(key) ?? { sent: 0, pending: 0, failed: 0 };
+            if (row.status === 'sent') agg.sent++;
+            else if (row.status === 'pending') agg.pending++;
+            else if (row.status === 'failed') agg.failed++;
+            perAccount.set(key, agg);
+          }
+
+          const { data: accounts } = await supabase
+            .from('smtp_accounts')
+            .select('id, label, smtp_username, sender_identities(from_email)')
+            .in('id', pool);
+
+          const totalSent = Array.from(perAccount.values()).reduce((s, v) => s + v.sent, 0);
+          const rows: RotationStat[] = (accounts ?? []).map((a: any) => {
+            const agg = perAccount.get(a.id) ?? { sent: 0, pending: 0, failed: 0 };
+            return {
+              id: a.id,
+              label: a.label || 'SMTP',
+              fromEmail: a.sender_identities?.from_email || a.smtp_username || '',
+              sent: agg.sent,
+              pending: agg.pending,
+              failed: agg.failed,
+              share: totalSent > 0 ? Math.round((agg.sent / totalSent) * 100) : 0,
+            };
+          }).sort((a, b) => b.sent - a.sent);
+          setRotationStats(rows);
+        } else {
+          setRotationStats([]);
+        }
       }
 
       // Fetch tracking stats
@@ -270,6 +327,63 @@ export default function CampaignDetail() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Rotation Pool Distribution */}
+        {rotationStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shuffle className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Rotation Pool Distribution</CardTitle>
+              </div>
+              <CardDescription>
+                Live breakdown of how emails are distributed across SMTP accounts in this campaign's rotation pool.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Account</TableHead>
+                    <TableHead className="text-right">Sent</TableHead>
+                    <TableHead className="text-right">Pending</TableHead>
+                    <TableHead className="text-right">Failed</TableHead>
+                    <TableHead className="w-[200px]">Share</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rotationStats.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div className="font-medium">{r.label}</div>
+                        <div className="text-xs text-muted-foreground">{r.fromEmail}</div>
+                        {r.sent === 0 && r.pending === 0 && r.failed === 0 && (
+                          <div className="text-xs text-muted-foreground mt-1 italic">
+                            Unused — check quota, status, or linked identity
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-green-600">{r.sent}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{r.pending}</TableCell>
+                      <TableCell className="text-right font-mono text-destructive">{r.failed}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all"
+                              style={{ width: `${r.share}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-10 text-right">{r.share}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Failed Emails */}
         {emailStats.failed > 0 && (
