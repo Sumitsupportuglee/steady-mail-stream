@@ -328,6 +328,63 @@ export default function CampaignDetail() {
           </Card>
         </div>
 
+        {/* Rotation Pool Distribution */}
+        {rotationStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shuffle className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Rotation Pool Distribution</CardTitle>
+              </div>
+              <CardDescription>
+                Live breakdown of how emails are distributed across SMTP accounts in this campaign's rotation pool.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Account</TableHead>
+                    <TableHead className="text-right">Sent</TableHead>
+                    <TableHead className="text-right">Pending</TableHead>
+                    <TableHead className="text-right">Failed</TableHead>
+                    <TableHead className="w-[200px]">Share</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rotationStats.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div className="font-medium">{r.label}</div>
+                        <div className="text-xs text-muted-foreground">{r.fromEmail}</div>
+                        {r.sent === 0 && r.pending === 0 && r.failed === 0 && (
+                          <div className="text-xs text-muted-foreground mt-1 italic">
+                            Unused — check quota, status, or linked identity
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-green-600">{r.sent}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{r.pending}</TableCell>
+                      <TableCell className="text-right font-mono text-destructive">{r.failed}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all"
+                              style={{ width: `${r.share}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-10 text-right">{r.share}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Failed Emails */}
         {emailStats.failed > 0 && (
           <Card className="border-destructive/50">
