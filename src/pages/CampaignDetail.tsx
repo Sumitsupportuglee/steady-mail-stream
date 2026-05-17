@@ -66,12 +66,21 @@ export default function CampaignDetail() {
   const [trackingStats, setTrackingStats] = useState<TrackingStats>({ opens: 0, clicks: 0, openRate: 0, clickRate: 0 });
   const [loading, setLoading] = useState(true);
   const [failedErrors, setFailedErrors] = useState<string[]>([]);
+  const [rotationStats, setRotationStats] = useState<RotationStat[]>([]);
 
   useEffect(() => {
     if (user && id) {
       fetchCampaignData();
     }
   }, [user, id]);
+
+  // Poll for live updates while the campaign is actively sending
+  useEffect(() => {
+    if (!user || !id) return;
+    if (campaign?.status !== 'queued' && campaign?.status !== 'sending') return;
+    const interval = setInterval(() => fetchCampaignData(), 5000);
+    return () => clearInterval(interval);
+  }, [user, id, campaign?.status]);
 
   const fetchCampaignData = async () => {
     try {
@@ -90,12 +99,12 @@ export default function CampaignDetail() {
         .single();
 
       if (campaignError) throw campaignError;
-      setCampaign(campaignData);
+      setCampaign(campaignData as any);
 
       // Fetch email queue stats with error details
       const { data: queueData } = await supabase
         .from('email_queue')
-        .select('status, error_log')
+        .select('status, error_log, smtp_account_id')
         .eq('campaign_id', id);
 
       if (queueData) {
@@ -106,9 +115,7 @@ export default function CampaignDetail() {
           failed: queueData.filter(e => e.status === 'failed').length,
         };
         setEmailStats(stats);
-        
-        // Group identical errors with counts so the panel stays actionable
-        // even when hundreds of recipients hit the same SMTP problem.
+
         const errorCounts = new Map<string, number>();
         for (const e of queueData) {
           if (e.status === 'failed' && e.error_log) {
@@ -120,6 +127,43 @@ export default function CampaignDetail() {
           .sort((a, b) => b[1] - a[1])
           .map(([msg, count]) => (count > 1 ? `[${count}×] ${msg}` : msg));
         setFailedErrors(grouped);
+
+        // Rotation pool per-account distribution
+        const pool = (campaignData as any)?.smtp_rotation_pool as string[] | null;
+        if (pool && pool.length > 1) {
+          const perAccount = new Map<string, { sent: number; pending: number; failed: number }>();
+          for (const pid of pool) perAccount.set(pid, { sent: 0, pending: 0, failed: 0 });
+          for (const row of queueData) {
+            const key = row.smtp_account_id ?? 'unassigned';
+            const agg = perAccount.get(key) ?? { sent: 0, pending: 0, failed: 0 };
+            if (row.status === 'sent') agg.sent++;
+            else if (row.status === 'pending') agg.pending++;
+            else if (row.status === 'failed') agg.failed++;
+            perAccount.set(key, agg);
+          }
+
+          const { data: accounts } = await supabase
+            .from('smtp_accounts')
+            .select('id, label, smtp_username, sender_identities(from_email)')
+            .in('id', pool);
+
+          const totalSent = Array.from(perAccount.values()).reduce((s, v) => s + v.sent, 0);
+          const rows: RotationStat[] = (accounts ?? []).map((a: any) => {
+            const agg = perAccount.get(a.id) ?? { sent: 0, pending: 0, failed: 0 };
+            return {
+              id: a.id,
+              label: a.label || 'SMTP',
+              fromEmail: a.sender_identities?.from_email || a.smtp_username || '',
+              sent: agg.sent,
+              pending: agg.pending,
+              failed: agg.failed,
+              share: totalSent > 0 ? Math.round((agg.sent / totalSent) * 100) : 0,
+            };
+          }).sort((a, b) => b.sent - a.sent);
+          setRotationStats(rows);
+        } else {
+          setRotationStats([]);
+        }
       }
 
       // Fetch tracking stats
