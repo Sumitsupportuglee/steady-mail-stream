@@ -13,6 +13,20 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['"Work Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        display: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
+      backgroundImage: {
+        'grid-steel':
+          'linear-gradient(hsl(var(--border)/0.4) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)/0.4) 1px, transparent 1px)',
+        'radial-fade':
+          'radial-gradient(ellipse at top, hsl(var(--primary)/0.18), transparent 60%)',
+      },
+      backgroundSize: {
+        'grid-steel': '32px 32px',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

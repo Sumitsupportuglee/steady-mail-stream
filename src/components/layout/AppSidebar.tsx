@@ -62,12 +62,15 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-border">
-      <SidebarHeader className="p-6 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Mail className="h-4 w-4 text-primary-foreground" />
+      <SidebarHeader className="p-5 border-b border-border">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-md border border-border bg-card flex items-center justify-center">
+            <span className="status-dot" />
           </div>
-          <span className="font-semibold text-lg">Senddot</span>
+          <div className="leading-none">
+            <div className="font-mono text-sm font-bold tracking-tight">senddot</div>
+            <div className="ops-mono-label mt-0.5">outbound · console</div>
+          </div>
         </div>
       </SidebarHeader>
 

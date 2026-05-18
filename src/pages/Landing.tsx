@@ -17,83 +17,34 @@ import {
   CheckCircle2,
   Send,
   Target,
-  Clock,
+  Activity,
   Shuffle,
   Sparkles,
+  Server,
+  GitBranch,
+  Gauge,
 } from 'lucide-react';
 
 const features = [
-  {
-    icon: Send,
-    title: 'Campaign Builder',
-    description:
-      'Create, schedule, and send cold email campaigns with a powerful drag-and-drop editor. Personalize at scale with merge tags.',
-  },
-  {
-    icon: Search,
-    title: 'Lead Finder',
-    description:
-      'Discover high-quality leads by scraping the web or searching by industry. Extract emails, phone numbers, and company details instantly.',
-  },
-  {
-    icon: Users,
-    title: 'Contact Management',
-    description:
-      'Import, organize, and segment your contacts. Track statuses like active, bounced, and unsubscribed automatically.',
-  },
-  {
-    icon: Shield,
-    title: 'Domain Verification',
-    description:
-      'Verify sender identities with DKIM records. Protect your domain reputation and maximize deliverability.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Real-Time Analytics',
-    description:
-      'Track opens, clicks, and deliveries in real time. Understand what works and optimize every campaign.',
-  },
-  {
-    icon: Globe,
-    title: 'Sender Identities',
-    description:
-      'Manage multiple sender identities and domains from one dashboard. Switch between brands effortlessly.',
-  },
-  {
-    icon: Shuffle,
-    title: 'SMTP Rotation Pool',
-    badge: 'New',
-    description:
-      'Send bulk volume safely. Auto-rotate across multiple SMTP accounts with matching sender identities — no spikes, no provider limit hits.',
-  },
+  { icon: Send, title: 'Campaign Builder', description: 'Compose, schedule, and dispatch outbound sequences with merge tags and per-recipient personalization.' },
+  { icon: Search, title: 'Lead Finder', description: 'Source verified prospects from the open web. Industry, geo, and URL-based discovery pipelines.' },
+  { icon: Users, title: 'Contact Graph', description: 'Unified contact store with auto-classification: active, bounced, replied, unsubscribed.' },
+  { icon: Shield, title: 'Domain & DKIM', description: 'Provision sender identities with DKIM, SPF and DMARC alignment baked in.' },
+  { icon: BarChart3, title: 'Real-time Telemetry', description: 'Stream opens, clicks, deliveries, and bounces into a single observability surface.' },
+  { icon: Globe, title: 'Multi-tenant Identities', description: 'Operate multiple brands and domains from one control plane. Per-client isolation.' },
 ];
 
 const stats = [
-  { value: '99%', label: 'Deliverability' },
-  { value: '10x', label: 'Faster Outreach' },
-  { value: '50%', label: 'More Replies' },
-  { value: '0', label: 'Spam Complaints' },
+  { value: '99%', label: 'Inbox placement' },
+  { value: '10x', label: 'Throughput' },
+  { value: '50%', label: 'Reply lift' },
+  { value: '0', label: 'Spam events' },
 ];
 
 const steps = [
-  {
-    icon: Target,
-    step: '01',
-    title: 'Find Leads',
-    description: 'Use our Lead Finder to discover prospects by industry, location, or URL.',
-  },
-  {
-    icon: Mail,
-    step: '02',
-    title: 'Craft Campaigns',
-    description: 'Write compelling emails with our rich editor and personalization tokens.',
-  },
-  {
-    icon: Zap,
-    step: '03',
-    title: 'Send & Track',
-    description: 'Launch campaigns and monitor opens, clicks, and replies in real time.',
-  },
+  { icon: Target, step: '01', title: 'Source', description: 'Discover prospects via Lead Finder pipelines.' },
+  { icon: Mail, step: '02', title: 'Compose', description: 'Author sequences with personalization tokens.' },
+  { icon: Zap, step: '03', title: 'Orchestrate', description: 'Queue, rotate, and ship at scale with telemetry.' },
 ];
 
 export default function Landing() {
@@ -102,45 +53,32 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <nav className="sticky top-0 z-50 border-b border-border bg-background/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <Mail className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card">
+              <span className="status-dot" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Senddot</span>
+            <div className="leading-none">
+              <div className="font-mono text-base font-bold tracking-tight">senddot</div>
+              <div className="ops-mono-label mt-0.5">outbound · orchestrated</div>
+            </div>
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">
-            <a href="#features" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-              Features
-            </a>
-            <a href="#how-it-works" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-              How It Works
-            </a>
-            <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-              Pricing
-            </a>
-            <Link to="/partnership" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-              Partnership
-            </Link>
+            <a href="#features" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Features</a>
+            <a href="#how-it-works" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">How</a>
+            <a href="#pricing" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
+            <Link to="/partnership" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Partners</Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user ? (
-              <Button asChild>
-                <Link to="/dashboard">
-                  Dashboard <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
+              <Button asChild><Link to="/dashboard">Console <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
             ) : (
               <>
-                <Button variant="ghost" asChild>
-                  <Link to="/auth">Login</Link>
-                </Button>
-                <Button asChild>
-                  <Link to="/auth">Get Started Free</Link>
-                </Button>
+                <Button variant="ghost" asChild><Link to="/auth">Login</Link></Button>
+                <Button asChild><Link to="/auth">Get Started</Link></Button>
               </>
             )}
           </div>
@@ -148,106 +86,173 @@ export default function Landing() {
       </nav>
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-24 text-center md:pt-32">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-muted px-4 py-1.5 text-sm text-muted-foreground">
-            <Zap className="h-3.5 w-3.5 text-primary" />
-            Cold email infrastructure built for agencies
-          </div>
+      <section className="relative overflow-hidden border-b border-border">
+        <div className="absolute inset-0 ops-grid opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
+        <div className="absolute inset-0 bg-radial-fade" />
+        <div className="relative mx-auto max-w-7xl px-6 pb-16 pt-20 md:pt-28">
+          <div className="grid gap-6 lg:grid-cols-12">
+            {/* Headline block */}
+            <div className="lg:col-span-7">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 backdrop-blur">
+                <span className="status-dot" />
+                <span className="ops-mono-label text-foreground/80">SYSTEM · OPERATIONAL</span>
+              </div>
 
-          <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
-            Send Cold Emails That{' '}
-            <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              Actually Get Replies
-            </span>
-          </h1>
+              <h1 className="mt-6 font-mono text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
+                Outbound infrastructure,<br />
+                <span className="text-primary">orchestrated.</span>
+              </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
-            Senddot gives you everything you need to find leads, build campaigns, and land in the
-            primary inbox — all from one dashboard.
-          </p>
+              <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
+                Senddot is a deliverability-aware sending platform — queueing, rotating, and scaling cold outbound across SMTP fleets and sender identities, without spikes or provider throttling.
+              </p>
 
-          {/* New feature highlight: SMTP rotation pool */}
-          <div className="mx-auto mt-8 max-w-2xl">
-            <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-[1px] shadow-lg shadow-primary/10">
-              <div className="relative flex flex-col items-center gap-3 rounded-2xl bg-background/80 px-5 py-4 backdrop-blur sm:flex-row sm:text-left">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                  <Shuffle className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-center gap-2 sm:justify-start">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                      <Sparkles className="h-3 w-3" /> New
-                    </span>
-                    <span className="text-sm font-semibold text-foreground">
-                      SMTP Rotation Pool
-                    </span>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button size="lg" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
+                  <Link to="/auth">Deploy Free <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                </Button>
+                <Button size="lg" variant="outline" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
+                  <a href="#features">Architecture</a>
+                </Button>
+              </div>
+
+              {/* Mini metrics row */}
+              <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {stats.map((s) => (
+                  <div key={s.label} className="rounded-md border border-border bg-card/50 p-3 backdrop-blur">
+                    <div className="font-mono text-2xl font-bold text-foreground">{s.value}</div>
+                    <div className="ops-mono-label mt-1">{s.label}</div>
                   </div>
-                  <p className="mt-1 text-center text-sm text-muted-foreground sm:text-left">
-                    Send bulk volume safely — we auto-rotate across multiple SMTP accounts &amp; matching sender identities to avoid spikes and stay under provider limits.
-                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* Rotation visualization panel */}
+            <div className="lg:col-span-5">
+              <div className="ops-glow relative h-full overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="h-4 w-4 text-primary" />
+                    <span className="font-mono text-xs font-semibold uppercase tracking-wider">Rotation Pool</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+                    <Sparkles className="h-3 w-3" /> New
+                  </span>
+                </div>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Live load distribution across SMTP nodes &amp; matching sender identities.
+                </p>
+
+                <div className="mt-5 space-y-3">
+                  {[
+                    { label: 'smtp-01 · ses-us-east', share: 28, sent: 1240 },
+                    { label: 'smtp-02 · postmark', share: 24, sent: 1060 },
+                    { label: 'smtp-03 · sendgrid', share: 22, sent: 970 },
+                    { label: 'smtp-04 · custom-relay', share: 16, sent: 710 },
+                    { label: 'smtp-05 · zoho', share: 10, sent: 440 },
+                  ].map((n) => (
+                    <div key={n.label}>
+                      <div className="flex items-center justify-between font-mono text-[11px]">
+                        <span className="flex items-center gap-2 text-foreground/80">
+                          <Server className="h-3 w-3 text-primary" />
+                          {n.label}
+                        </span>
+                        <span className="text-muted-foreground">{n.sent.toLocaleString()} · {n.share}%</span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${n.share}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-border pt-3 font-mono text-[11px] text-muted-foreground">
+                  <span>throughput · 4,420 / hr</span>
+                  <span className="flex items-center gap-1.5 text-primary"><span className="status-dot" /> healthy</span>
                 </div>
               </div>
             </div>
           </div>
-
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button size="lg" className="h-12 px-8 text-base" asChild>
-              <Link to="/auth">
-                Start Sending for Free <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild>
-              <a href="#features">See All Features</a>
-            </Button>
-          </div>
-
-          {/* Stats */}
-          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-2 gap-6 sm:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-border bg-card p-5">
-                <div className="text-3xl font-bold text-primary">{stat.value}</div>
-                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="border-t border-border bg-muted/40 py-24">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Everything You Need to Scale Outreach
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-              From lead generation to campaign analytics — Senddot is the all-in-one cold email
-              platform built for agencies and sales teams.
+      {/* Features — bento grid */}
+      <section id="features" className="border-b border-border py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <div className="ops-mono-label">// system.modules</div>
+              <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
+                Operational outbound architecture
+              </h2>
+            </div>
+            <p className="max-w-md text-sm text-muted-foreground">
+              Every module is built around deliverability — rotation, throttling, identity, and telemetry working as one orchestrated stack.
             </p>
           </div>
 
-          <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
+          <div className="mt-12 grid auto-rows-[minmax(180px,_auto)] grid-cols-1 gap-4 md:grid-cols-6">
+            {/* Big tile — rotation pool (NEW) */}
+            <div className="ops-glow relative overflow-hidden rounded-xl border border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card p-6 md:col-span-4 md:row-span-2">
+              <div className="absolute inset-0 ops-grid opacity-30 [mask-image:radial-gradient(ellipse_at_bottom_right,black,transparent_70%)]" />
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <Shuffle className="h-5 w-5 text-primary" />
+                  <span className="font-mono text-xs font-semibold uppercase tracking-wider">SMTP Rotation Pool</span>
+                  <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-primary">New</span>
+                </div>
+                <h3 className="mt-4 font-mono text-2xl font-bold tracking-tight">Deliverability-aware scaling</h3>
+                <p className="mt-3 max-w-md text-sm text-muted-foreground">
+                  Distribute volume across a pool of SMTP accounts and sender identities. Senddot synchronizes rotation during dispatch — flattening spikes, respecting provider quotas, and keeping every node within its warm-up curve.
+                </p>
+                <div className="mt-6 grid grid-cols-3 gap-3">
+                  {[
+                    { k: 'spike control', v: 'on' },
+                    { k: 'identity sync', v: 'paired' },
+                    { k: 'quota guard', v: 'live' },
+                  ].map((c) => (
+                    <div key={c.k} className="rounded-md border border-border bg-background/40 p-3">
+                      <div className="ops-mono-label">{c.k}</div>
+                      <div className="mt-1 font-mono text-sm font-semibold text-primary">{c.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Throughput tile */}
+            <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
+              <Gauge className="h-5 w-5 text-primary" />
+              <h3 className="mt-3 font-mono text-lg font-semibold">Throttling engine</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Hourly &amp; daily caps per identity. Adaptive pacing as warm-up progresses.
+              </p>
+            </div>
+
+            {/* Telemetry tile */}
+            <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
+              <Activity className="h-5 w-5 text-primary" />
+              <h3 className="mt-3 font-mono text-lg font-semibold">Live telemetry</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Stream opens, clicks, and deliveries into the campaign console in real time.
+              </p>
+            </div>
+
+            {/* Remaining feature tiles */}
+            {features.map((feature, i) => (
               <div
                 key={feature.title}
-                className="group rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-lg"
+                className={`group rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40 ${
+                  i === 0 ? 'md:col-span-3' : i === 1 ? 'md:col-span-3' : 'md:col-span-2'
+                }`}
               >
-                <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
-                  <feature.icon className="h-5 w-5 text-primary" />
-                </div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold">{feature.title}</h3>
-                  {('badge' in feature) && feature.badge && (
-                    <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                      {feature.badge}
-                    </span>
-                  )}
+                  <feature.icon className="h-5 w-5 text-primary" />
+                  <span className="ops-mono-label">module / 0{i + 1}</span>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {feature.description}
-                </p>
+                <h3 className="mt-3 font-mono text-lg font-semibold">{feature.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -255,112 +260,97 @@ export default function Landing() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-24">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Three Steps to More Meetings
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Get up and running in minutes — no complicated setup required.
-            </p>
-          </div>
-
-          <div className="mt-16 grid gap-10 md:grid-cols-3">
-            {steps.map((step) => (
-              <div key={step.step} className="relative text-center">
-                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                  <step.icon className="h-6 w-6 text-primary" />
-                </div>
-                <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                  Step {step.step}
-                </span>
-                <h3 className="mt-2 text-xl font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Social Proof / Trust */}
-      <section className="border-t border-border bg-muted/40 py-24">
-        <div className="mx-auto max-w-4xl px-6 text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Built for Deliverability
+      <section id="how-it-works" className="border-b border-border py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="ops-mono-label">// pipeline</div>
+          <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
+            From source to send
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-            Senddot handles domain verification, DKIM setup, and rate limiting so your emails
-            land in the primary inbox — not spam.
-          </p>
 
-          <div className="mt-12 grid gap-4 text-left sm:grid-cols-2">
-            {[
-              'Automatic DKIM & domain verification',
-              'Smart rate limiting per hour & day',
-              'Bounce & unsubscribe tracking',
-              'Open & click tracking pixels',
-              'SMTP configuration per sender',
-              'Admin-level user & identity management',
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                <span className="text-sm font-medium">{item}</span>
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            {steps.map((step, i) => (
+              <div key={step.step} className="relative rounded-xl border border-border bg-card p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-background">
+                    <step.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="font-mono text-3xl font-bold text-muted-foreground/40">{step.step}</span>
+                </div>
+                <h3 className="mt-4 font-mono text-lg font-semibold">{step.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
+                {i < steps.length - 1 && (
+                  <GitBranch className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-border md:block" />
+                )}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Reviews */}
-      <ReviewsSection />
+      {/* Deliverability */}
+      <section className="border-b border-border bg-card/30 py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid gap-10 lg:grid-cols-2">
+            <div>
+              <div className="ops-mono-label">// deliverability</div>
+              <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
+                Engineered for the inbox
+              </h2>
+              <p className="mt-4 max-w-lg text-muted-foreground">
+                Authentication, rotation, throttling, and reputation monitoring — wired into a single pipeline so your messages land where they belong.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                'Automatic DKIM &amp; domain verification',
+                'Hourly &amp; daily rate limiting',
+                'Bounce &amp; unsubscribe tracking',
+                'Open &amp; click telemetry',
+                'Per-identity SMTP routing',
+                'Admin user &amp; identity controls',
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-md border border-border bg-card p-3">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span className="text-sm" dangerouslySetInnerHTML={{ __html: item }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
-      {/* App Updates */}
+      <ReviewsSection />
       <UpdatesSection />
 
       {/* Pricing */}
-      <section id="pricing" className="py-24">
+      <section id="pricing" className="border-t border-border py-24">
         <div className="mx-auto max-w-5xl px-6">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Choose the plan that works for your agency. Cancel anytime.
-            </p>
+            <div className="ops-mono-label">// pricing.tiers</div>
+            <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">Simple, transparent pricing</h2>
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">Choose the plan that fits your fleet. Cancel anytime.</p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
             {PLANS.map((plan) => {
               const isBusiness = plan.id === 'business';
               const monthly = plan.pricing.inr.monthly;
               const yearly = plan.pricing.inr.yearly;
               const savings = monthly * 12 - yearly;
               return (
-                <div
-                  key={plan.id}
-                  className={
-                    isBusiness
-                      ? 'relative rounded-2xl border-2 border-primary bg-card p-8 text-center shadow-lg'
-                      : 'rounded-2xl border border-border bg-card p-8 text-center'
-                  }
-                >
+                <div key={plan.id} className={isBusiness ? 'ops-glow relative rounded-xl border border-primary bg-card p-8' : 'rounded-xl border border-border bg-card p-8'}>
                   {isBusiness && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
-                        Most Popular
-                      </span>
+                      <span className="bg-primary text-primary-foreground font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Most Popular</span>
                     </div>
                   )}
-                  <h3 className="text-xl font-semibold">{plan.name}</h3>
+                  <h3 className="font-mono text-xl font-semibold">{plan.name}</h3>
                   <p className="mt-2 text-sm text-muted-foreground min-h-[40px]">{plan.description}</p>
                   <div className="mt-4">
-                    <span className="text-4xl font-bold">₹{monthly.toLocaleString('en-IN')}</span>
-                    <span className="text-muted-foreground">/month</span>
+                    <span className="font-mono text-4xl font-bold">₹{monthly.toLocaleString('en-IN')}</span>
+                    <span className="text-muted-foreground"> / month</span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    or ₹{yearly.toLocaleString('en-IN')}/year · save ₹{savings.toLocaleString('en-IN')}
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">or ₹{yearly.toLocaleString('en-IN')}/year · save ₹{savings.toLocaleString('en-IN')}</p>
                   <ul className="mt-6 space-y-3 text-left text-sm">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-center gap-2">
@@ -369,12 +359,7 @@ export default function Landing() {
                       </li>
                     ))}
                   </ul>
-                  <Button
-                    size="lg"
-                    variant={isBusiness ? 'default' : 'outline'}
-                    className="w-full mt-8"
-                    asChild
-                  >
+                  <Button size="lg" variant={isBusiness ? 'default' : 'outline'} className="w-full mt-8 font-mono text-sm uppercase tracking-wider" asChild>
                     <Link to="/auth">Get Started</Link>
                   </Button>
                 </div>
@@ -382,32 +367,27 @@ export default function Landing() {
             })}
           </div>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Prices shown in INR. USD pricing available at checkout based on your location.
-          </p>
+          <p className="mt-6 text-center text-xs text-muted-foreground">Prices shown in INR. USD pricing available at checkout based on your location.</p>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-border py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 md:flex-row">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 md:flex-row">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <Mail className="h-4 w-4 text-primary-foreground" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card">
+              <span className="status-dot" />
             </div>
-            <span className="font-semibold">Senddot</span>
+            <span className="font-mono font-semibold">senddot</span>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/partnership" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Inquire for Partnership</Link>
-            <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms & Conditions</Link>
+            <Link to="/partnership" className="font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">Partnership</Link>
+            <Link to="/terms" className="font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
           </div>
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Senddot by OdishaBajar.com. All rights reserved.
-          </p>
+          <p className="font-mono text-xs text-muted-foreground">© {new Date().getFullYear()} senddot · OdishaBajar.com</p>
         </div>
       </footer>
 
-      {/* ElevenLabs AI Chat Agent */}
       <ElevenLabsWidget />
     </div>
   );
