@@ -87,7 +87,7 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-border">
-        <div className="absolute inset-0 ops-grid opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
+        <div className="absolute inset-0 ops-grid opacity-25 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
         <div className="absolute inset-0 bg-radial-fade" />
         <div className="relative mx-auto max-w-7xl px-6 pb-16 pt-20 md:pt-28">
           <div className="grid gap-6 lg:grid-cols-12">
