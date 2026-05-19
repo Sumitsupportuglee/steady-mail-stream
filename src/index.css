@@ -4,44 +4,44 @@
 
 @layer base {
   :root {
-    /* Slate & Steel — operational outbound aesthetic (dark by default) */
-    --background: 220 26% 9%;
-    --foreground: 214 32% 91%;
-    --card: 218 23% 12%;
-    --card-foreground: 214 32% 91%;
-    --popover: 218 23% 12%;
-    --popover-foreground: 214 32% 91%;
-    --primary: 200 75% 62%;
-    --primary-foreground: 220 28% 10%;
-    --secondary: 217 19% 18%;
-    --secondary-foreground: 214 32% 91%;
-    --muted: 217 19% 16%;
-    --muted-foreground: 214 14% 62%;
-    --accent: 217 28% 20%;
-    --accent-foreground: 214 32% 91%;
+    /* Warm Sand — light, operational outbound aesthetic */
+    --background: 30 33% 98%;
+    --foreground: 28 24% 22%;
+    --card: 30 25% 95%;
+    --card-foreground: 28 24% 22%;
+    --popover: 30 25% 95%;
+    --popover-foreground: 28 24% 22%;
+    --primary: 28 24% 44%;
+    --primary-foreground: 30 33% 98%;
+    --secondary: 30 20% 92%;
+    --secondary-foreground: 28 24% 22%;
+    --muted: 30 15% 92%;
+    --muted-foreground: 30 10% 45%;
+    --accent: 37 29% 70%;
+    --accent-foreground: 28 24% 22%;
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 217 19% 20%;
-    --input: 217 19% 18%;
-    --ring: 200 75% 62%;
+    --border: 30 15% 85%;
+    --input: 30 15% 88%;
+    --ring: 28 24% 44%;
     --radius: 0.375rem;
 
-    --sidebar-background: 220 28% 8%;
-    --sidebar-foreground: 214 20% 75%;
-    --sidebar-primary: 200 75% 62%;
-    --sidebar-primary-foreground: 220 28% 10%;
-    --sidebar-accent: 217 19% 16%;
-    --sidebar-accent-foreground: 214 32% 91%;
-    --sidebar-border: 217 19% 18%;
-    --sidebar-ring: 200 75% 62%;
+    --sidebar-background: 30 25% 96%;
+    --sidebar-foreground: 28 24% 25%;
+    --sidebar-primary: 28 24% 44%;
+    --sidebar-primary-foreground: 30 33% 98%;
+    --sidebar-accent: 30 20% 92%;
+    --sidebar-accent-foreground: 28 24% 22%;
+    --sidebar-border: 30 15% 85%;
+    --sidebar-ring: 28 24% 44%;
 
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    
-    /* Custom AgencyMail tokens */
+    --chart-1: 28 24% 44%;
+    --chart-2: 37 29% 55%;
+    --chart-3: 30 20% 60%;
+    --chart-4: 20 25% 50%;
+    --chart-5: 10 30% 45%;
+
+    /* Custom tokens */
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
