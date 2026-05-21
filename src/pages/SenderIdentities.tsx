@@ -590,15 +590,57 @@ export default function SenderIdentities() {
                           </div>
                         );
 
+                        // Deliverability score: DKIM 40 + SPF 30 + DMARC 30
+                        const dkimVerified = selectedIdentity.domain_status === 'verified';
+                        const score =
+                          (showDkim ? (dkimVerified ? 40 : 0) : 40) +
+                          (spfStatus === 'verified' ? 30 : 0) +
+                          (dmarcStatus === 'verified' ? 30 : 0);
+                        const tier =
+                          score >= 100 ? { label: 'Excellent', sendRate: '~500 emails/min', note: 'Providers fully trust this sender. Inbox placement is optimal and the queue runs at full speed.' }
+                          : score >= 70 ? { label: 'Strong', sendRate: '~330 emails/min', note: 'Good auth posture. Sending is accelerated and bulk-sender requirements are met.' }
+                          : score >= 40 ? { label: 'Basic', sendRate: '~215 emails/min', note: 'Sends will go out, but expect more spam-folder placement. Add SPF & DMARC to unlock faster, safer sending.' }
+                          : { label: 'At risk', sendRate: '~100 emails/min', note: 'Queue is throttled to avoid blocks. Verify DKIM, SPF & DMARC to dramatically improve delivery.' };
+                        const scoreColor = score >= 100 ? 'text-emerald-600' : score >= 70 ? 'text-primary' : score >= 40 ? 'text-amber-600' : 'text-destructive';
+
                         return (
                           <>
+                            <div className="rounded-lg border bg-card p-4 space-y-3">
+                              <div className="flex items-start justify-between gap-4 flex-wrap">
+                                <div>
+                                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Deliverability score</div>
+                                  <div className="flex items-baseline gap-2 mt-1">
+                                    <span className={`text-3xl font-bold ${scoreColor}`}>{score}</span>
+                                    <span className="text-sm text-muted-foreground">/ 100 · {tier.label}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Effective send rate</div>
+                                  <div className="text-lg font-semibold">{tier.sendRate}</div>
+                                </div>
+                              </div>
+                              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all ${score >= 100 ? 'bg-emerald-500' : score >= 70 ? 'bg-primary' : score >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                <span className={`px-2 py-1 rounded border ${(!showDkim || dkimVerified) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>DKIM {showDkim ? (dkimVerified ? '✓' : '○') : 'managed'} · +40</span>
+                                <span className={`px-2 py-1 rounded border ${spfStatus === 'verified' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>SPF {spfStatus === 'verified' ? '✓' : '○'} · +30</span>
+                                <span className={`px-2 py-1 rounded border ${dmarcStatus === 'verified' ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-muted border-border text-muted-foreground'}`}>DMARC {dmarcStatus === 'verified' ? '✓' : '○'} · +30</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{tier.note}</p>
+                            </div>
+
                             <Alert className="border-primary/30 bg-primary/5">
                               <Sparkles className="h-4 w-4 text-primary" />
-                              <AlertTitle>DKIM is enough to send — SPF & DMARC boost inbox delivery</AlertTitle>
+                              <AlertTitle>DKIM is enough to send — SPF & DMARC unlock faster, safer delivery</AlertTitle>
                               <AlertDescription className="text-sm">
-                                Your DKIM record alone is sufficient to start sending emails. <strong>SPF and DMARC are optional</strong>, but adding them dramatically improves deliverability — Gmail and Yahoo now require all three for bulk senders.
+                                Verifying SPF and DMARC isn't cosmetic — the sending engine actually <strong>accelerates the queue</strong> for fully-authenticated senders and slows it down for un-authenticated ones to avoid blocks. Gmail and Yahoo now require all three for bulk senders.
                               </AlertDescription>
                             </Alert>
+
 
                             {/* DKIM — only relevant for SES-routed identities */}
                             {showDkim && (
