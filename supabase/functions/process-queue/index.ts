@@ -789,13 +789,21 @@ Deno.serve(async (req) => {
               // identity, then to the campaign's identity.
               let perRowFromEmail: string | null = null
               let perRowFromName: string | null = null
+              let perRowSpf: string | null = null
+              let perRowDmarc: string | null = null
+              let perRowDkim: string | null = null
               if (email.sender_identity_id) {
                 const idn = await resolveIdentity(email.sender_identity_id)
                 if (idn) {
                   perRowFromEmail = idn.from_email
                   perRowFromName = idn.from_name
+                  perRowSpf = idn.spf_status
+                  perRowDmarc = idn.dmarc_status
+                  perRowDkim = idn.domain_status
                 }
               }
+              currentAuthDelay = delayForAuth(perRowSpf, perRowDmarc, perRowDkim)
+
 
               let fromName: string | undefined = perRowFromName ?? linkedFromName ?? undefined
               if (!fromName && email.campaign_id) {
