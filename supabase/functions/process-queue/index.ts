@@ -596,18 +596,39 @@ Deno.serve(async (req) => {
       // Cache from_name lookups per campaign for this batch
       const fromNameCache = new Map<string, string | undefined>()
       // Cache per-email-row identity overrides (id -> { from_email, from_name })
-      const identityCache = new Map<string, { from_email: string; from_name: string | null }>()
+      const identityCache = new Map<string, { from_email: string; from_name: string | null; spf_status: string | null; dmarc_status: string | null; domain_status: string | null }>()
       const resolveIdentity = async (id: string) => {
         if (identityCache.has(id)) return identityCache.get(id)!
         const { data } = await supabase
           .from('sender_identities')
-          .select('from_email, from_name')
+          .select('from_email, from_name, spf_status, dmarc_status, domain_status')
           .eq('id', id)
           .maybeSingle()
-        const v = data?.from_email ? { from_email: data.from_email, from_name: data.from_name || null } : null
+        const v = data?.from_email ? {
+          from_email: data.from_email,
+          from_name: data.from_name || null,
+          spf_status: (data as any).spf_status || null,
+          dmarc_status: (data as any).dmarc_status || null,
+          domain_status: (data as any).domain_status || null,
+        } : null
         if (v) identityCache.set(id, v)
         return v
       }
+
+      // Auth-posture-aware throttle: SPF + DMARC verified senders ship faster
+      // because providers trust them; un-authenticated senders are slowed down
+      // to avoid spam-folder placement and rate-limit blocks.
+      const delayForAuth = (spf?: string | null, dmarc?: string | null, dkim?: string | null): number => {
+        const spfOk = spf === 'verified'
+        const dmarcOk = dmarc === 'verified'
+        const dkimOk = dkim === 'verified'
+        if (spfOk && dmarcOk && dkimOk) return 120
+        if (spfOk && dmarcOk) return 180
+        if (spfOk || dmarcOk) return 280
+        return INTER_SEND_DELAY_MS
+      }
+      // Track current row's auth posture so the post-send delay can use it.
+      let currentAuthDelay = INTER_SEND_DELAY_MS
 
       // All emails in this `emails` array share the same SMTP account (grouped
       // above). If that SMTP account has a linked sender identity, ALL outgoing
@@ -768,13 +789,21 @@ Deno.serve(async (req) => {
               // identity, then to the campaign's identity.
               let perRowFromEmail: string | null = null
               let perRowFromName: string | null = null
+              let perRowSpf: string | null = null
+              let perRowDmarc: string | null = null
+              let perRowDkim: string | null = null
               if (email.sender_identity_id) {
                 const idn = await resolveIdentity(email.sender_identity_id)
                 if (idn) {
                   perRowFromEmail = idn.from_email
                   perRowFromName = idn.from_name
+                  perRowSpf = idn.spf_status
+                  perRowDmarc = idn.dmarc_status
+                  perRowDkim = idn.domain_status
                 }
               }
+              currentAuthDelay = delayForAuth(perRowSpf, perRowDmarc, perRowDkim)
+
 
               let fromName: string | undefined = perRowFromName ?? linkedFromName ?? undefined
               if (!fromName && email.campaign_id) {
@@ -848,8 +877,8 @@ Deno.serve(async (req) => {
               successCount++
 
               // Smooth out bursts to avoid provider rate-limits (451 ...).
-              if (INTER_SEND_DELAY_MS > 0) {
-                await new Promise(r => setTimeout(r, INTER_SEND_DELAY_MS))
+              if (currentAuthDelay > 0) {
+                await new Promise(r => setTimeout(r, currentAuthDelay))
               }
             } catch (sendErr: unknown) {
               const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
