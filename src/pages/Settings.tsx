@@ -646,7 +646,7 @@ export default function Settings() {
           </TabsContent>
 
           {/* ─── Sender Identities ─────────────────────────── */}
-          <TabsContent value="identities" className="space-y-4 mt-4">
+          <TabsContent value="identities" className="space-y-4 mt-4 hidden" aria-hidden="true">
             {/* Help */}
             <Accordion type="single" collapsible>
               <AccordionItem value="help" className="border rounded-lg px-4">
