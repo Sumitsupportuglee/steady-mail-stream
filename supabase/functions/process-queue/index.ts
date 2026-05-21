@@ -877,8 +877,8 @@ Deno.serve(async (req) => {
               successCount++
 
               // Smooth out bursts to avoid provider rate-limits (451 ...).
-              if (INTER_SEND_DELAY_MS > 0) {
-                await new Promise(r => setTimeout(r, INTER_SEND_DELAY_MS))
+              if (currentAuthDelay > 0) {
+                await new Promise(r => setTimeout(r, currentAuthDelay))
               }
             } catch (sendErr: unknown) {
               const errMsg = sendErr instanceof Error ? sendErr.message : 'Unknown send error'
