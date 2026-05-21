@@ -375,10 +375,9 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="smtp" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="smtp">SMTP Accounts</TabsTrigger>
-            <TabsTrigger value="identities">Sender Identities</TabsTrigger>
           </TabsList>
 
           {/* ─── General ───────────────────────────────────── */}
