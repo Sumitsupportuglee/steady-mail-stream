@@ -375,10 +375,9 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="smtp" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="smtp">SMTP Accounts</TabsTrigger>
-            <TabsTrigger value="identities">Sender Identities</TabsTrigger>
           </TabsList>
 
           {/* ─── General ───────────────────────────────────── */}
@@ -647,7 +646,7 @@ export default function Settings() {
           </TabsContent>
 
           {/* ─── Sender Identities ─────────────────────────── */}
-          <TabsContent value="identities" className="space-y-4 mt-4">
+          <TabsContent value="identities" className="space-y-4 mt-4 hidden" aria-hidden="true">
             {/* Help */}
             <Accordion type="single" collapsible>
               <AccordionItem value="help" className="border rounded-lg px-4">
