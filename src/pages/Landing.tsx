@@ -398,7 +398,9 @@ export default function Landing() {
         </div>
       </footer>
 
-      <ElevenLabsWidget />
+      <Suspense fallback={null}>
+        <ElevenLabsWidget />
+      </Suspense>
     </div>
   );
 }
