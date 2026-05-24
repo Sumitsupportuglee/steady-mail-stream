@@ -327,8 +327,10 @@ export default function Landing() {
         </div>
       </section>
 
-      <ReviewsSection />
-      <UpdatesSection />
+      <Suspense fallback={null}>
+        <ReviewsSection />
+        <UpdatesSection />
+      </Suspense>
 
       {/* Pricing */}
       <section id="pricing" className="border-t border-border py-24">
