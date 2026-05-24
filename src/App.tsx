@@ -12,30 +12,49 @@ import { AdminRoute } from "@/components/auth/AdminRoute";
 // Landing eagerly imported (LCP) — everything else lazy
 import Landing from "./pages/Landing";
 
-const Auth = lazy(() => import("./pages/Auth"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const SenderIdentities = lazy(() => import("./pages/SenderIdentities"));
-const Contacts = lazy(() => import("./pages/Contacts"));
-const Campaigns = lazy(() => import("./pages/Campaigns"));
-const CampaignWizard = lazy(() => import("./pages/CampaignWizard"));
-const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
-const Settings = lazy(() => import("./pages/Settings"));
-const LeadFinder = lazy(() => import("./pages/LeadFinder"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const Terms = lazy(() => import("./pages/Terms"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Clients = lazy(() => import("./pages/Clients"));
-const ClientReport = lazy(() => import("./pages/ClientReport"));
-const CRM = lazy(() => import("./pages/CRM"));
-const Integrations = lazy(() => import("./pages/Integrations"));
-const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
-const PartnershipInquiry = lazy(() => import("./pages/PartnershipInquiry"));
+// Reload once if a lazy chunk fails to load (stale hash after redeploy)
+const lazyWithRetry = <T,>(factory: () => Promise<{ default: React.ComponentType<T> }>) =>
+  lazy(async () => {
+    try {
+      return await factory();
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      if (/dynamically imported module|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+        const key = "__lovable_chunk_reload__";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          window.location.reload();
+          return { default: (() => null) as unknown as React.ComponentType<T> };
+        }
+      }
+      throw err;
+    }
+  });
 
-const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
-const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
-const SESIdentities = lazy(() => import("./pages/admin/SESIdentities"));
-const RateLimits = lazy(() => import("./pages/admin/RateLimits"));
-const MasterDirectory = lazy(() => import("./pages/admin/MasterDirectory"));
+const Auth = lazyWithRetry(() => import("./pages/Auth"));
+const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
+const SenderIdentities = lazyWithRetry(() => import("./pages/SenderIdentities"));
+const Contacts = lazyWithRetry(() => import("./pages/Contacts"));
+const Campaigns = lazyWithRetry(() => import("./pages/Campaigns"));
+const CampaignWizard = lazyWithRetry(() => import("./pages/CampaignWizard"));
+const CampaignDetail = lazyWithRetry(() => import("./pages/CampaignDetail"));
+const Settings = lazyWithRetry(() => import("./pages/Settings"));
+const LeadFinder = lazyWithRetry(() => import("./pages/LeadFinder"));
+const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const Clients = lazyWithRetry(() => import("./pages/Clients"));
+const ClientReport = lazyWithRetry(() => import("./pages/ClientReport"));
+const CRM = lazyWithRetry(() => import("./pages/CRM"));
+const Integrations = lazyWithRetry(() => import("./pages/Integrations"));
+const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
+const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
+
+const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"));
+const UserManagement = lazyWithRetry(() => import("./pages/admin/UserManagement"));
+const SESIdentities = lazyWithRetry(() => import("./pages/admin/SESIdentities"));
+const RateLimits = lazyWithRetry(() => import("./pages/admin/RateLimits"));
+const MasterDirectory = lazyWithRetry(() => import("./pages/admin/MasterDirectory"));
 
 const queryClient = new QueryClient();
 
