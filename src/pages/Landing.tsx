@@ -1,10 +1,18 @@
+import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { ReviewsSection } from '@/components/reviews/ReviewsSection';
-import { UpdatesSection } from '@/components/landing/UpdatesSection';
-import { ElevenLabsWidget } from '@/components/ElevenLabsWidget';
 import { Button } from '@/components/ui/button';
 import { PLANS } from '@/config/plans';
+
+const ReviewsSection = lazy(() =>
+  import('@/components/reviews/ReviewsSection').then((m) => ({ default: m.ReviewsSection }))
+);
+const UpdatesSection = lazy(() =>
+  import('@/components/landing/UpdatesSection').then((m) => ({ default: m.UpdatesSection }))
+);
+const ElevenLabsWidget = lazy(() =>
+  import('@/components/ElevenLabsWidget').then((m) => ({ default: m.ElevenLabsWidget }))
+);
 import {
   Mail,
   Search,
@@ -319,8 +327,10 @@ export default function Landing() {
         </div>
       </section>
 
-      <ReviewsSection />
-      <UpdatesSection />
+      <Suspense fallback={null}>
+        <ReviewsSection />
+        <UpdatesSection />
+      </Suspense>
 
       {/* Pricing */}
       <section id="pricing" className="border-t border-border py-24">
@@ -388,7 +398,9 @@ export default function Landing() {
         </div>
       </footer>
 
-      <ElevenLabsWidget />
+      <Suspense fallback={null}>
+        <ElevenLabsWidget />
+      </Suspense>
     </div>
   );
 }

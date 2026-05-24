@@ -1,11 +1,28 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 let scriptLoaded = false;
 let widgetAdded = false;
 
 export function ElevenLabsWidget() {
+  const [ready, setReady] = useState(false);
+
+  // Defer mounting until the browser is idle so it doesn't compete with LCP
   useEffect(() => {
-    // Prevent duplicate custom element registration
+    const idle = (cb: () => void) => {
+      const w = window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      };
+      if (typeof w.requestIdleCallback === 'function') {
+        w.requestIdleCallback(cb, { timeout: 4000 });
+      } else {
+        setTimeout(cb, 3000);
+      }
+    };
+    idle(() => setReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     if (widgetAdded) return;
 
     if (!scriptLoaded) {
@@ -30,7 +47,7 @@ export function ElevenLabsWidget() {
       widget.remove();
       widgetAdded = false;
     };
-  }, []);
+  }, [ready]);
 
   return null;
 }
