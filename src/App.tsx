@@ -46,10 +46,10 @@ const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const Clients = lazyWithRetry(() => import("./pages/Clients"));
 const ClientReport = lazyWithRetry(() => import("./pages/ClientReport"));
 const CRM = lazyWithRetry(() => import("./pages/CRM"));
-const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
-const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Integrations = lazyWithRetry(() => import("./pages/Integrations"));
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
 const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
 
 const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"));
 const UserManagement = lazyWithRetry(() => import("./pages/admin/UserManagement"));
