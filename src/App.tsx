@@ -46,7 +46,8 @@ const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const Clients = lazyWithRetry(() => import("./pages/Clients"));
 const ClientReport = lazyWithRetry(() => import("./pages/ClientReport"));
 const CRM = lazyWithRetry(() => import("./pages/CRM"));
-const Integrations = lazyWithRetry(() => import("./pages/Integrations"));
+const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
 const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
 
@@ -70,8 +71,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
-      <BrowserRouter>
+                <Route path="/partnership" element={<PartnershipInquiry />} />
+                <Route path="/contact" element={<Contact />} />
+
         <AuthProvider>
           <ClientProvider>
             <Suspense fallback={<RouteFallback />}>

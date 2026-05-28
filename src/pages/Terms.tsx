@@ -103,8 +103,10 @@ export default function Terms() {
         <p>We reserve the right to update these Terms at any time. Changes will be effective upon posting to the Service. Continued use after changes constitutes acceptance of the updated Terms.</p>
 
         <h2 className="text-xl font-semibold mt-8">14. Contact Us</h2>
-        <p>If you have any questions about these Terms, please contact us at:</p>
-        <p className="font-medium">Email: support@senddot.in</p>
+        <p>
+          If you have any questions about these Terms, please visit our{' '}
+          <Link to="/contact" className="text-primary underline-offset-4 hover:underline">Contact page</Link>.
+        </p>
 
         <div className="mt-12 border-t border-border pt-8">
           <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Senddot by OdishaBajar.com. All rights reserved.</p>
