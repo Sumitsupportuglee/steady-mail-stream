@@ -48,6 +48,7 @@ export default function PartnershipInquiry() {
         <Link to="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Home
         </Link>
+        <h1 className="sr-only">Inquire for Partnership</h1>
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
