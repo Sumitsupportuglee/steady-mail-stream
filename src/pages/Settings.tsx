@@ -19,6 +19,7 @@ import {
   Loader2, Save, Plus, Trash2, Eye, EyeOff, CheckCircle, XCircle,
   Server, Mail, HelpCircle, Info, AlertCircle, Copy, RefreshCw, Star
 } from 'lucide-react';
+import { SmtpHealthMetrics } from '@/components/settings/SmtpHealthMetrics';
 
 // ─── SMTP Presets ────────────────────────────────────────────
 const SMTP_PRESETS: Record<string, { host: string; ssl: number; tls: number; note: string }> = {
@@ -601,7 +602,8 @@ export default function Settings() {
                             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                               <div className={`h-full ${dailyPct >= 90 ? 'bg-destructive' : dailyPct >= 70 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${dailyPct}%` }} />
                             </div>
-                          </div>
+                        </div>
+                        <SmtpHealthMetrics smtpAccountId={acct.id} userId={user!.id} />
                         </div>
                         <div className="flex items-center justify-between gap-3 pt-2 border-t">
                           <div className="flex-1 min-w-0">
