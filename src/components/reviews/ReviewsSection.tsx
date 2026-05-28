@@ -65,7 +65,7 @@ export function ReviewsSection() {
                 "{review.review_text}"
               </p>
               <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-sm font-medium">{maskEmail(review.user_email)}</p>
+                <p className="text-sm font-medium">{review.display_email}</p>
                 <p className="text-xs text-muted-foreground">
                   {new Date(review.created_at).toLocaleDateString('en-IN', {
                     year: 'numeric',
