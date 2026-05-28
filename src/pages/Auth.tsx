@@ -130,7 +130,7 @@ export default function Auth() {
             <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
               <Mail className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="font-bold text-2xl">AgencyMail</span>
+            <h1 className="font-bold text-2xl">Sign in to Senddot</h1>
           </div>
         </div>
 

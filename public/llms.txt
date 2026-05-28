@@ -1,0 +1,11 @@
+# Senddot by OdishaBajar.com
+
+> Managed cold email infrastructure for agencies — multi-client sending, deliverability, CRM, and lead-finding in one platform.
+
+## Pages
+
+- [Home](/): Overview of Senddot and key features.
+- [Contact](/contact): Contact emails and phone for support and sales.
+- [Partnership](/partnership): Submit a partnership inquiry.
+- [Sign in](/auth): Account sign-in and registration.
+- [Terms](/terms): Terms of service.
