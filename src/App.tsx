@@ -49,6 +49,7 @@ const CRM = lazyWithRetry(() => import("./pages/CRM"));
 const Integrations = lazyWithRetry(() => import("./pages/Integrations"));
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
 const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
 
 const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"));
 const UserManagement = lazyWithRetry(() => import("./pages/admin/UserManagement"));
@@ -80,6 +81,8 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
                 <Route path="/partnership" element={<PartnershipInquiry />} />
+                <Route path="/contact" element={<Contact />} />
+
 
                 {/* Landing */}
                 <Route path="/" element={<Landing />} />
