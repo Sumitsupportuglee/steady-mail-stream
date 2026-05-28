@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { WarmupStatus } from '@/components/dashboard/WarmupStatus';
+import { SenderHealthOverview } from '@/components/dashboard/SenderHealthOverview';
 import { 
   Crown,
   Mail, 
@@ -214,6 +215,9 @@ export default function Dashboard() {
 
         {/* Email Account Warmup Status */}
         <WarmupStatus />
+
+        {/* Sender Health (Deliverability + Risk per SMTP) */}
+        <SenderHealthOverview />
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
