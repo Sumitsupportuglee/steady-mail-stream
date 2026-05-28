@@ -60,6 +60,20 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Contact strip */}
+      <div className="border-b border-border bg-card/40">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-6 py-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground md:flex-row">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <a href="mailto:support@senddot.in" className="transition-colors hover:text-foreground">support@senddot.in</a>
+            <span className="hidden text-border md:inline">·</span>
+            <a href="mailto:ssingh2100.2100@gmail.com" className="transition-colors hover:text-foreground">ssingh2100.2100@gmail.com</a>
+            <span className="hidden text-border md:inline">·</span>
+            <a href="tel:+917609933502" className="transition-colors hover:text-foreground">+91-7609933502</a>
+          </div>
+          <Link to="/contact" className="text-primary transition-colors hover:text-foreground">Contact us →</Link>
+        </div>
+      </div>
+
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-border bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
@@ -78,7 +92,9 @@ export default function Landing() {
             <a href="#how-it-works" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">How</a>
             <a href="#pricing" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
             <Link to="/partnership" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Partners</Link>
+            <Link to="/contact" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Contact</Link>
           </div>
+
 
           <div className="flex items-center gap-2">
             {user ? (
@@ -392,7 +408,9 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-4">
             <Link to="/partnership" className="font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">Partnership</Link>
+            <Link to="/contact" className="font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
             <Link to="/terms" className="font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
+
           </div>
           <p className="font-mono text-xs text-muted-foreground">© {new Date().getFullYear()} senddot · OdishaBajar.com</p>
         </div>
