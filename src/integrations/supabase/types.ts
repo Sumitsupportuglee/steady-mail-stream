@@ -856,26 +856,26 @@ export type Database = {
       reviews: {
         Row: {
           created_at: string
+          display_email: string
           id: string
           rating: number
           review_text: string
-          user_email: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          display_email: string
           id?: string
           rating: number
           review_text: string
-          user_email: string
           user_id: string
         }
         Update: {
           created_at?: string
+          display_email?: string
           id?: string
           rating?: number
           review_text?: string
-          user_email?: string
           user_id?: string
         }
         Relationships: []
