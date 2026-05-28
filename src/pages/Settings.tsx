@@ -19,6 +19,7 @@ import {
   Loader2, Save, Plus, Trash2, Eye, EyeOff, CheckCircle, XCircle,
   Server, Mail, HelpCircle, Info, AlertCircle, Copy, RefreshCw, Star
 } from 'lucide-react';
+import { SmtpHealthMetrics } from '@/components/settings/SmtpHealthMetrics';
 
 // ─── SMTP Presets ────────────────────────────────────────────
 const SMTP_PRESETS: Record<string, { host: string; ssl: number; tls: number; note: string }> = {
