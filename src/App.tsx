@@ -71,9 +71,8 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-                <Route path="/partnership" element={<PartnershipInquiry />} />
-                <Route path="/contact" element={<Contact />} />
-
+      <Sonner />
+      <BrowserRouter>
         <AuthProvider>
           <ClientProvider>
             <Suspense fallback={<RouteFallback />}>
@@ -82,6 +81,8 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
                 <Route path="/partnership" element={<PartnershipInquiry />} />
+                <Route path="/contact" element={<Contact />} />
+
 
                 {/* Landing */}
                 <Route path="/" element={<Landing />} />
