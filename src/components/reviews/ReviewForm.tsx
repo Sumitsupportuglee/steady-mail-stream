@@ -50,11 +50,16 @@ export function ReviewForm() {
         if (error) throw error;
         toast.success('Review updated!');
       } else {
+        const email = user!.email ?? '';
+        const [local, domain] = email.split('@');
+        const masked = domain
+          ? `${(local ?? '').slice(0, 2) || 'a'}***@${domain}`
+          : 'anonymous';
         const { error } = await supabase
           .from('reviews')
           .insert({
             user_id: user!.id,
-            user_email: user!.email!,
+            display_email: masked,
             rating,
             review_text: reviewText.trim(),
           });

@@ -4,7 +4,7 @@ import { Star, Quote } from 'lucide-react';
 
 interface Review {
   id: string;
-  user_email: string;
+  display_email: string;
   rating: number;
   review_text: string;
   created_at: string;
@@ -18,10 +18,10 @@ export function ReviewsSection() {
     const fetchReviews = async () => {
       const { data } = await supabase
         .from('reviews')
-        .select('*')
+        .select('id, display_email, rating, review_text, created_at')
         .order('created_at', { ascending: false })
         .limit(6);
-      setReviews(data || []);
+      setReviews((data as Review[]) || []);
       setLoading(false);
     };
     fetchReviews();
@@ -29,11 +29,6 @@ export function ReviewsSection() {
 
   if (loading || reviews.length === 0) return null;
 
-  const maskEmail = (email: string) => {
-    const [local, domain] = email.split('@');
-    if (local.length <= 2) return `${local}***@${domain}`;
-    return `${local.slice(0, 2)}***@${domain}`;
-  };
 
   return (
     <section className="py-24">
@@ -70,7 +65,7 @@ export function ReviewsSection() {
                 "{review.review_text}"
               </p>
               <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-sm font-medium">{maskEmail(review.user_email)}</p>
+                <p className="text-sm font-medium">{review.display_email}</p>
                 <p className="text-xs text-muted-foreground">
                   {new Date(review.created_at).toLocaleDateString('en-IN', {
                     year: 'numeric',
