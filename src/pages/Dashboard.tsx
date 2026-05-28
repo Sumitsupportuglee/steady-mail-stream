@@ -216,6 +216,9 @@ export default function Dashboard() {
         {/* Email Account Warmup Status */}
         <WarmupStatus />
 
+        {/* Sender Health (Deliverability + Risk per SMTP) */}
+        <SenderHealthOverview />
+
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
