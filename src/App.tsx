@@ -50,6 +50,7 @@ const Integrations = lazyWithRetry(() => import("./pages/Integrations"));
 const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
 const PartnershipInquiry = lazyWithRetry(() => import("./pages/PartnershipInquiry"));
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Docs = lazyWithRetry(() => import("./pages/Docs"));
 
 const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"));
 const UserManagement = lazyWithRetry(() => import("./pages/admin/UserManagement"));
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
                 <Route path="/partnership" element={<PartnershipInquiry />} />
                 <Route path="/contact" element={<Contact />} />
+                <Route path="/docs" element={<Docs />} />
 
 
                 {/* Landing */}
