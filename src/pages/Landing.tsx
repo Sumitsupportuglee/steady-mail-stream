@@ -75,11 +75,12 @@ export default function Landing() {
 
           <div className="hidden items-center gap-8 md:flex">
             <a href="#features" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Features</a>
-            <a href="#how-it-works" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">How</a>
             <a href="#pricing" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
             <Link to="/partnership" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Partners</Link>
             <Link to="/contact" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Contact</Link>
+            <Link to="/docs" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Documentation</Link>
           </div>
+
 
 
           <div className="flex items-center gap-2">
