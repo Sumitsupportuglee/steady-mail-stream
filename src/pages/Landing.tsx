@@ -34,25 +34,25 @@ import {
 } from 'lucide-react';
 
 const features = [
-  { icon: Send, title: 'Campaign Builder', description: 'Compose, schedule, and dispatch outbound sequences with merge tags and per-recipient personalization.' },
-  { icon: Search, title: 'Lead Finder', description: 'Source verified prospects from the open web. Industry, geo, and URL-based discovery pipelines.' },
-  { icon: Users, title: 'Contact Graph', description: 'Unified contact store with auto-classification: active, bounced, replied, unsubscribed.' },
-  { icon: Shield, title: 'Domain & DKIM', description: 'Provision sender identities with DKIM, SPF and DMARC alignment baked in.' },
-  { icon: BarChart3, title: 'Real-time Telemetry', description: 'Stream opens, clicks, deliveries, and bounces into a single observability surface.' },
-  { icon: Globe, title: 'Multi-tenant Identities', description: 'Operate multiple brands and domains from one control plane. Per-client isolation.' },
+  { icon: Send, title: 'Multi-Client Campaigns', description: 'Run outbound sequences for every client from one workspace — isolated data, isolated identities, one operator console.' },
+  { icon: Search, title: 'Built-in Lead Finder', description: 'Source verified prospects for each client without paying for a separate scraping stack. Industry, geo, and URL pipelines included.' },
+  { icon: Users, title: 'Client-Scoped CRM', description: 'A CRM per client with contact status, replies, and unsubscribes — no external tools, no data leaving your deployment.' },
+  { icon: Shield, title: 'Own Your Domains', description: 'Provision unlimited sending domains and identities with SPF, DKIM, and DMARC verification built in.' },
+  { icon: BarChart3, title: 'Agency Telemetry', description: 'Per-client dashboards for opens, clicks, deliveries, and bounces — reportable to clients directly from your brand.' },
+  { icon: Globe, title: 'White-Label & Self-Host', description: 'Deploy under your own domain and brand. You own the infrastructure, the data, and the client relationship.' },
 ];
 
 const stats = [
   { value: '99%', label: 'Inbox placement' },
   { value: '10x', label: 'Throughput' },
   { value: '50%', label: 'Reply lift' },
-  { value: '0', label: 'Spam events' },
+  { value: '0', label: 'Per-seat fees' },
 ];
 
 const steps = [
-  { icon: Target, step: '01', title: 'Source', description: 'Discover prospects via Lead Finder pipelines.' },
-  { icon: Mail, step: '02', title: 'Compose', description: 'Author sequences with personalization tokens.' },
-  { icon: Zap, step: '03', title: 'Orchestrate', description: 'Queue, rotate, and ship at scale with telemetry.' },
+  { icon: Target, step: '01', title: 'Deploy', description: 'One-time deployment into your environment, re-branded to your agency.' },
+  { icon: Mail, step: '02', title: 'Onboard clients', description: 'Add unlimited client workspaces, sending domains, and inboxes.' },
+  { icon: Zap, step: '03', title: 'Send & scale', description: 'Rotate SMTPs, pace sends, and report deliverability per client.' },
 ];
 
 export default function Landing() {
