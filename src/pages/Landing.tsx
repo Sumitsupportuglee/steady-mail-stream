@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { PLANS } from '@/config/plans';
+import { useIsIndianUser } from '@/hooks/useGeoLocation';
 
 const ReviewsSection = lazy(() =>
   import('@/components/reviews/ReviewsSection').then((m) => ({ default: m.ReviewsSection }))
