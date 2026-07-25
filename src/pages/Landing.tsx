@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { PLANS } from '@/config/plans';
+import { useIsIndianUser } from '@/hooks/useGeoLocation';
 
 const ReviewsSection = lazy(() =>
   import('@/components/reviews/ReviewsSection').then((m) => ({ default: m.ReviewsSection }))
@@ -57,6 +58,9 @@ const steps = [
 
 export default function Landing() {
   const { user } = useAuth();
+  const isIndian = useIsIndianUser();
+  const standardPrice = isIndian ? '₹25,00,000' : '$30,000';
+  const priceNote = isIndian ? 'One-time deployment fee' : 'One-time deployment fee';
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -340,49 +344,71 @@ export default function Landing() {
         <div className="mx-auto max-w-5xl px-6">
           <div className="text-center mb-16">
             <div className="ops-mono-label">// pricing.tiers</div>
-            <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">Simple, transparent pricing</h2>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">Choose the plan that fits your fleet. Cancel anytime.</p>
+            <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">Deployment pricing</h2>
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+              One-time deployment. You own the platform. No per-seat SaaS fees.
+            </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
-            {PLANS.map((plan) => {
-              const isBusiness = plan.id === 'business';
-              const monthly = plan.pricing.inr.monthly;
-              const yearly = plan.pricing.inr.yearly;
-              const savings = monthly * 12 - yearly;
-              return (
-                <div key={plan.id} className={isBusiness ? 'ops-glow relative rounded-xl border border-primary bg-card p-8' : 'rounded-xl border border-border bg-card p-8'}>
-                  {isBusiness && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="bg-primary text-primary-foreground font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Most Popular</span>
-                    </div>
-                  )}
-                  <h3 className="font-mono text-xl font-semibold">{plan.name}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground min-h-[40px]">{plan.description}</p>
-                  <div className="mt-4">
-                    <span className="font-mono text-4xl font-bold">₹{monthly.toLocaleString('en-IN')}</span>
-                    <span className="text-muted-foreground"> / month</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">or ₹{yearly.toLocaleString('en-IN')}/year · save ₹{savings.toLocaleString('en-IN')}</p>
-                  <ul className="mt-6 space-y-3 text-left text-sm">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button size="lg" variant={isBusiness ? 'default' : 'outline'} className="w-full mt-8 font-mono text-sm uppercase tracking-wider" asChild>
-                    <Link to="/auth">Get Started</Link>
-                  </Button>
-                </div>
-              );
-            })}
+          <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
+            {/* Standard */}
+            <div className="ops-glow relative rounded-xl border border-primary bg-card p-8 flex flex-col">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-primary text-primary-foreground font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Standard</span>
+              </div>
+              <h3 className="font-mono text-xl font-semibold">Standard Deployment</h3>
+              <p className="mt-2 text-sm text-muted-foreground min-h-[40px]">
+                For agencies ready to own their outbound stack under their own brand.
+              </p>
+              <div className="mt-4">
+                <span className="font-mono text-4xl font-bold">{standardPrice}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{priceNote} · plus small monthly maintenance</p>
+              <ul className="mt-6 space-y-3 text-left text-sm flex-1">
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Full white-label rights</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Fully deployable into your own server / environment</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Fully customizable AI features</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Free contact finder included with the platform</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />No usage limits from the developer</li>
+                <li className="flex items-start gap-2 text-muted-foreground"><span className="h-4 w-4 shrink-0 mt-0.5 text-center">—</span>No re-selling rights</li>
+              </ul>
+              <Button size="lg" className="w-full mt-8 font-mono text-sm uppercase tracking-wider" asChild>
+                <Link to="/contact">Book Deployment Call <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </div>
+
+            {/* Custom */}
+            <div className="relative rounded-xl border border-border bg-card p-8 flex flex-col">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-foreground text-background font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Custom</span>
+              </div>
+              <h3 className="font-mono text-xl font-semibold">Custom Partnership</h3>
+              <p className="mt-2 text-sm text-muted-foreground min-h-[40px]">
+                For large agencies that need exclusivity, re-selling rights, and bespoke scope.
+              </p>
+              <div className="mt-4">
+                <span className="font-mono text-4xl font-bold">Let's talk</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Priced to the engagement · scoped to your operation</p>
+              <ul className="mt-6 space-y-3 text-left text-sm flex-1">
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Fully customizable platform &amp; roadmap</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Best for large agencies seeking exclusivity</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Re-selling rights as per final deal</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Everything in Standard, tailored to scale</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Dedicated onboarding &amp; support terms</li>
+              </ul>
+              <Button size="lg" variant="outline" className="w-full mt-8 font-mono text-sm uppercase tracking-wider" asChild>
+                <Link to="/partnership">Request Custom Quote <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </div>
           </div>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">Prices shown in INR. USD pricing available at checkout based on your location.</p>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            {isIndian ? 'Prices shown in INR for customers in India.' : 'Prices shown in USD.'} Taxes may apply based on your jurisdiction.
+          </p>
         </div>
       </section>
+
 
       {/* Footer */}
       <footer className="border-t border-border py-10">
