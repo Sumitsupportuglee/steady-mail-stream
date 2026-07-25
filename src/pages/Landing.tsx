@@ -106,24 +106,24 @@ export default function Landing() {
             <div className="lg:col-span-7">
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 backdrop-blur">
                 <span className="status-dot" />
-                <span className="ops-mono-label text-foreground/80">SYSTEM · OPERATIONAL</span>
+                <span className="ops-mono-label text-foreground/80">AGENCY-FIRST · SELF-HOSTED</span>
               </div>
 
               <h1 className="mt-6 font-mono text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
-                Outbound infrastructure,<br />
-                <span className="text-primary">orchestrated.</span>
+                The outbound platform<br />
+                <span className="text-primary">agencies own.</span>
               </h1>
 
               <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-                Senddot is a deliverability-aware sending platform — queueing, rotating, and scaling cold outbound across SMTP fleets and sender identities, without spikes or provider throttling.
+                Senddot is the agency-first outbound email infrastructure — deployed into your own environment, re-branded as yours, and built to run unlimited clients, sending domains, and campaigns from one platform. One-time deployment, small monthly maintenance. No per-seat SaaS.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
-                  <Link to="/auth">Deploy Free <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  <Link to="/contact">Book deployment call <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
-                  <a href="#features">Architecture</a>
+                  <a href="#features">See the platform</a>
                 </Button>
               </div>
 
