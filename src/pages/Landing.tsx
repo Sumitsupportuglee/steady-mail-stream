@@ -193,13 +193,13 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <div className="ops-mono-label">// system.modules</div>
+              <div className="ops-mono-label">// platform.modules</div>
               <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-                Operational outbound architecture
+                Everything your agency runs outbound on — in one platform you own
               </h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
-              Every module is built around deliverability — rotation, throttling, identity, and telemetry working as one orchestrated stack.
+              Multi-client workspaces, sending domains, CRM, lead sourcing, and deliverability tooling — deployed under your brand, priced as infrastructure, not per seat.
             </p>
           </div>
 
