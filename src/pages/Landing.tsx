@@ -69,7 +69,7 @@ export default function Landing() {
             </div>
             <div className="leading-none">
               <div className="font-mono text-base font-bold tracking-tight">senddot</div>
-              <div className="ops-mono-label mt-0.5">outbound · orchestrated</div>
+              <div className="ops-mono-label mt-0.5">agency · outbound · owned</div>
             </div>
           </Link>
 
