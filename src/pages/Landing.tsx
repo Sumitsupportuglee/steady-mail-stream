@@ -305,10 +305,10 @@ export default function Landing() {
             <div>
               <div className="ops-mono-label">// deliverability</div>
               <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-                Engineered for the inbox
+                Deliverability engineered for agency scale
               </h2>
               <p className="mt-4 max-w-lg text-muted-foreground">
-                Authentication, rotation, throttling, and reputation monitoring — wired into a single pipeline so your messages land where they belong.
+                Authentication, SMTP rotation, throttling, and reputation monitoring — wired into one pipeline so every client's messages land in the inbox, not the spam folder.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
