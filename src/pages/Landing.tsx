@@ -58,6 +58,9 @@ const steps = [
 
 export default function Landing() {
   const { user } = useAuth();
+  const isIndian = useIsIndianUser();
+  const standardPrice = isIndian ? '₹25,00,000' : '$30,000';
+  const priceNote = isIndian ? 'One-time deployment fee' : 'One-time deployment fee';
 
   return (
     <div className="min-h-screen bg-background text-foreground">
