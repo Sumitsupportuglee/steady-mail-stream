@@ -273,9 +273,9 @@ export default function Landing() {
       {/* How It Works */}
       <section id="how-it-works" className="border-b border-border py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <div className="ops-mono-label">// pipeline</div>
+          <div className="ops-mono-label">// how.it.works</div>
           <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-            From source to send
+            From deployment to sending, in your name
           </h2>
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
