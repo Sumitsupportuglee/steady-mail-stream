@@ -34,25 +34,25 @@ import {
 } from 'lucide-react';
 
 const features = [
-  { icon: Send, title: 'Campaign Builder', description: 'Compose, schedule, and dispatch outbound sequences with merge tags and per-recipient personalization.' },
-  { icon: Search, title: 'Lead Finder', description: 'Source verified prospects from the open web. Industry, geo, and URL-based discovery pipelines.' },
-  { icon: Users, title: 'Contact Graph', description: 'Unified contact store with auto-classification: active, bounced, replied, unsubscribed.' },
-  { icon: Shield, title: 'Domain & DKIM', description: 'Provision sender identities with DKIM, SPF and DMARC alignment baked in.' },
-  { icon: BarChart3, title: 'Real-time Telemetry', description: 'Stream opens, clicks, deliveries, and bounces into a single observability surface.' },
-  { icon: Globe, title: 'Multi-tenant Identities', description: 'Operate multiple brands and domains from one control plane. Per-client isolation.' },
+  { icon: Send, title: 'Multi-Client Campaigns', description: 'Run outbound sequences for every client from one workspace — isolated data, isolated identities, one operator console.' },
+  { icon: Search, title: 'Built-in Lead Finder', description: 'Source verified prospects for each client without paying for a separate scraping stack. Industry, geo, and URL pipelines included.' },
+  { icon: Users, title: 'Client-Scoped CRM', description: 'A CRM per client with contact status, replies, and unsubscribes — no external tools, no data leaving your deployment.' },
+  { icon: Shield, title: 'Own Your Domains', description: 'Provision unlimited sending domains and identities with SPF, DKIM, and DMARC verification built in.' },
+  { icon: BarChart3, title: 'Agency Telemetry', description: 'Per-client dashboards for opens, clicks, deliveries, and bounces — reportable to clients directly from your brand.' },
+  { icon: Globe, title: 'White-Label & Self-Host', description: 'Deploy under your own domain and brand. You own the infrastructure, the data, and the client relationship.' },
 ];
 
 const stats = [
   { value: '99%', label: 'Inbox placement' },
   { value: '10x', label: 'Throughput' },
   { value: '50%', label: 'Reply lift' },
-  { value: '0', label: 'Spam events' },
+  { value: '0', label: 'Per-seat fees' },
 ];
 
 const steps = [
-  { icon: Target, step: '01', title: 'Source', description: 'Discover prospects via Lead Finder pipelines.' },
-  { icon: Mail, step: '02', title: 'Compose', description: 'Author sequences with personalization tokens.' },
-  { icon: Zap, step: '03', title: 'Orchestrate', description: 'Queue, rotate, and ship at scale with telemetry.' },
+  { icon: Target, step: '01', title: 'Deploy', description: 'One-time deployment into your environment, re-branded to your agency.' },
+  { icon: Mail, step: '02', title: 'Onboard clients', description: 'Add unlimited client workspaces, sending domains, and inboxes.' },
+  { icon: Zap, step: '03', title: 'Send & scale', description: 'Rotate SMTPs, pace sends, and report deliverability per client.' },
 ];
 
 export default function Landing() {
@@ -69,7 +69,7 @@ export default function Landing() {
             </div>
             <div className="leading-none">
               <div className="font-mono text-base font-bold tracking-tight">senddot</div>
-              <div className="ops-mono-label mt-0.5">outbound · orchestrated</div>
+              <div className="ops-mono-label mt-0.5">agency · outbound · owned</div>
             </div>
           </Link>
 
@@ -106,24 +106,24 @@ export default function Landing() {
             <div className="lg:col-span-7">
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 backdrop-blur">
                 <span className="status-dot" />
-                <span className="ops-mono-label text-foreground/80">SYSTEM · OPERATIONAL</span>
+                <span className="ops-mono-label text-foreground/80">AGENCY-FIRST · SELF-HOSTED</span>
               </div>
 
               <h1 className="mt-6 font-mono text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
-                Outbound infrastructure,<br />
-                <span className="text-primary">orchestrated.</span>
+                The outbound platform<br />
+                <span className="text-primary">agencies own.</span>
               </h1>
 
               <p className="mt-6 max-w-xl text-base text-muted-foreground md:text-lg">
-                Senddot is a deliverability-aware sending platform — queueing, rotating, and scaling cold outbound across SMTP fleets and sender identities, without spikes or provider throttling.
+                Senddot is the agency-first outbound email infrastructure — deployed into your own environment, re-branded as yours, and built to run unlimited clients, sending domains, and campaigns from one platform. One-time deployment, small monthly maintenance. No per-seat SaaS.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
-                  <Link to="/auth">Deploy Free <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  <Link to="/contact">Book deployment call <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-6 font-mono text-sm uppercase tracking-wider" asChild>
-                  <a href="#features">Architecture</a>
+                  <a href="#features">See the platform</a>
                 </Button>
               </div>
 
@@ -193,13 +193,13 @@ export default function Landing() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <div className="ops-mono-label">// system.modules</div>
+              <div className="ops-mono-label">// platform.modules</div>
               <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-                Operational outbound architecture
+                Everything your agency runs outbound on — in one platform you own
               </h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground">
-              Every module is built around deliverability — rotation, throttling, identity, and telemetry working as one orchestrated stack.
+              Multi-client workspaces, sending domains, CRM, lead sourcing, and deliverability tooling — deployed under your brand, priced as infrastructure, not per seat.
             </p>
           </div>
 
@@ -273,9 +273,9 @@ export default function Landing() {
       {/* How It Works */}
       <section id="how-it-works" className="border-b border-border py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <div className="ops-mono-label">// pipeline</div>
+          <div className="ops-mono-label">// how.it.works</div>
           <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-            From source to send
+            From deployment to sending, in your name
           </h2>
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
@@ -305,10 +305,10 @@ export default function Landing() {
             <div>
               <div className="ops-mono-label">// deliverability</div>
               <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">
-                Engineered for the inbox
+                Deliverability engineered for agency scale
               </h2>
               <p className="mt-4 max-w-lg text-muted-foreground">
-                Authentication, rotation, throttling, and reputation monitoring — wired into a single pipeline so your messages land where they belong.
+                Authentication, SMTP rotation, throttling, and reputation monitoring — wired into one pipeline so every client's messages land in the inbox, not the spam folder.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

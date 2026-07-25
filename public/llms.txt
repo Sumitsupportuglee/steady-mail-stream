@@ -1,11 +1,26 @@
 # Senddot by OdishaBajar.com
 
-> Managed cold email infrastructure for agencies — multi-client sending, deliverability, CRM, and lead-finding in one platform.
+> Senddot is the agency-first outbound email infrastructure that agencies own and self-host. Deploy under your own brand, manage unlimited clients, sending domains, and campaigns from one platform. One-time deployment fee plus small monthly maintenance — no per-seat SaaS.
+
+## What Senddot is
+
+- Agency-first: built for agencies running outbound for multiple clients, not for single-team SaaS use.
+- Self-hosted and owned: deployed into the agency's own environment and re-branded to the agency.
+- Multi-client: isolated workspaces, sending domains, CRM, and reporting per client.
+- Deliverability-aware: SMTP rotation pool, SPF/DKIM/DMARC verification, throttling, and telemetry.
+- Included modules: campaign builder, lead finder, CRM, sender identities, domain verification, analytics.
+
+## Commercials
+
+- One-time deployment (includes onboarding and re-branding to the agency's identity).
+- Small monthly maintenance fee for updates and support.
+- No per-seat pricing. Agencies own the platform after deployment.
 
 ## Pages
 
 - [Home](/): Overview of Senddot and key features.
 - [Contact](/contact): Contact emails and phone for support and sales.
 - [Partnership](/partnership): Submit a partnership inquiry.
+- [Documentation](/docs): Domain reputation, sender rotation, deliverability, CRM.
 - [Sign in](/auth): Account sign-in and registration.
 - [Terms](/terms): Terms of service.
