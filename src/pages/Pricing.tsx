@@ -71,6 +71,16 @@ export default function Pricing() {
       return;
     }
 
+    // Non-Indian users pay via PayPal payment link
+    if (!isIndian) {
+      window.open(PAYPAL_PAYMENT_LINK, '_blank', 'noopener,noreferrer');
+      toast({
+        title: 'Redirecting to PayPal',
+        description: 'Complete your payment on PayPal. Your account is activated once payment is confirmed.',
+      });
+      return;
+    }
+
     const fullPlanId = `${planId}_${billingCycle}`;
     setLoadingPlan(fullPlanId);
 
@@ -83,6 +93,7 @@ export default function Pricing() {
       });
 
       if (error) throw error;
+
 
       const planConfig = PLANS.find(p => p.id === planId)!;
 
