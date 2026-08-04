@@ -76,7 +76,10 @@ export default function Landing() {
               className="h-9 w-9 rounded-md object-contain"
               width={36}
               height={36}
+              decoding="async"
+              fetchPriority="high"
             />
+
             <div className="leading-none">
               <div className="font-mono text-base font-bold tracking-tight">senddot</div>
               <div className="ops-mono-label mt-0.5">agency · outbound · owned</div>
