@@ -13,11 +13,14 @@ import { CheckCircle2, Crown, Loader2, Zap, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLANS, type PlanConfig } from '@/config/plans';
 
+const PAYPAL_PAYMENT_LINK = 'https://www.paypal.com/ncp/payment/2KQ4JZNT2E8P2';
+
 declare global {
   interface Window {
     Razorpay: any;
   }
 }
+
 
 export default function Pricing() {
   const { user } = useAuth();
