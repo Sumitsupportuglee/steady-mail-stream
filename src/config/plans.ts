@@ -14,18 +14,19 @@ export interface PlanConfig {
 export const PLANS: PlanConfig[] = [
   {
     id: 'starter',
-    name: 'Starter',
-    description: 'Perfect for solopreneurs and small teams getting started with cold email outreach',
-    maxSmtp: 3,
-    maxSenderIdentities: 3,
+    name: 'Monthly Subscription',
+    description: 'Full premium access on a simple monthly plan — no deployment required',
+    maxSmtp: 5,
+    maxSenderIdentities: 5,
     features: [
-      'Up to 3 SMTP accounts',
-      'Up to 3 sender identities',
-      'Email campaigns',
+      'Unlimited contact extraction',
+      'Up to 5 email sending accounts (SMTP)',
+      'Up to 5 sender identities',
+      'Unlimited AI credits for composing & editing emails',
+      'Email campaigns with rotation pool',
       'Lead Finder with web scraping',
-      'Contact management',
       'Open & click tracking',
-      'Domain verification',
+      'Domain verification (SPF/DKIM/DMARC)',
       'Real-time analytics',
     ],
     pricing: {
@@ -33,6 +34,7 @@ export const PLANS: PlanConfig[] = [
       usd: { monthly: 49, yearly: 499 },
     },
   },
+
   {
     id: 'business',
     name: 'Business',

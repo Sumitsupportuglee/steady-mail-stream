@@ -344,11 +344,46 @@ export default function Landing() {
         <div className="mx-auto max-w-5xl px-6">
           <div className="text-center mb-16">
             <div className="ops-mono-label">// pricing.tiers</div>
-            <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">Deployment pricing</h2>
+            <h2 className="mt-2 font-mono text-3xl font-bold tracking-tight md:text-4xl">Pricing</h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+              Subscribe monthly, or own the platform outright with a one-time deployment.
+            </p>
+          </div>
+
+          {/* Monthly subscription */}
+          <div className="mb-10 rounded-xl border border-border bg-card p-8">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <span className="bg-primary/10 text-primary font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Monthly Subscription</span>
+                <h3 className="mt-3 font-mono text-xl font-semibold">Premium access, billed monthly</h3>
+                <div className="mt-3">
+                  <span className="font-mono text-4xl font-bold">{isIndian ? '₹3,499' : '$49'}</span>
+                  <span className="text-muted-foreground">/month</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isIndian ? 'Secure payment via Razorpay' : 'Secure payment via PayPal'} · cancel anytime
+                </p>
+              </div>
+              <ul className="grid gap-3 text-left text-sm sm:grid-cols-2 md:max-w-xl md:flex-1">
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Unlimited contact extraction</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Up to 5 sending accounts (SMTP)</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />Unlimited AI credits for composing &amp; editing</li>
+                <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />All premium features included</li>
+              </ul>
+              <Button size="lg" className="font-mono text-sm uppercase tracking-wider md:shrink-0" asChild>
+                <Link to="/pricing">Subscribe Monthly <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-center mb-8">
+            <div className="ops-mono-label">// deployment.ownership</div>
+            <h3 className="mt-2 font-mono text-2xl font-bold tracking-tight">Deployment pricing</h3>
+            <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
               One-time deployment. You own the platform. No per-seat SaaS fees.
             </p>
           </div>
+
 
           <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
             {/* Standard */}
