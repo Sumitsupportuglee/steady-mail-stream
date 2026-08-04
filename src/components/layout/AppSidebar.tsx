@@ -1,4 +1,6 @@
+import senddotLogo from '@/assets/senddot-logo.png.asset.json';
 import { 
+
   LayoutDashboard, 
   Mail, 
   Users, 
@@ -65,9 +67,14 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border">
       <SidebarHeader className="p-5 border-b border-border">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-md border border-border bg-card flex items-center justify-center">
-            <span className="status-dot" />
-          </div>
+          <img
+            src={senddotLogo.url}
+            alt="senddot logo"
+            className="h-8 w-8 rounded-md object-contain"
+            width={32}
+            height={32}
+          />
+
           <div className="leading-none">
             <div className="font-mono text-sm font-bold tracking-tight">senddot</div>
             <div className="ops-mono-label mt-0.5">outbound · console</div>
