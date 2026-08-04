@@ -68,14 +68,19 @@ export default function Landing() {
       <nav className="sticky top-0 z-50 border-b border-border bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card">
-              <span className="status-dot" />
-            </div>
+            <img
+              src={senddotLogo.url}
+              alt="senddot logo"
+              className="h-9 w-9 rounded-md object-contain"
+              width={36}
+              height={36}
+            />
             <div className="leading-none">
               <div className="font-mono text-base font-bold tracking-tight">senddot</div>
               <div className="ops-mono-label mt-0.5">agency · outbound · owned</div>
             </div>
           </Link>
+
 
           <div className="hidden items-center gap-8 md:flex">
             <a href="#features" className="font-mono text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">Features</a>
