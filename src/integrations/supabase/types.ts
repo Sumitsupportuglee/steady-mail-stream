@@ -809,6 +809,8 @@ export type Database = {
           smtp_port: number | null
           smtp_username: string | null
           tier: Database["public"]["Enums"]["tier_type"] | null
+          trial_ends_at: string | null
+          trial_started_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -829,6 +831,8 @@ export type Database = {
           smtp_port?: number | null
           smtp_username?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
+          trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -849,6 +853,8 @@ export type Database = {
           smtp_port?: number | null
           smtp_username?: string | null
           tier?: Database["public"]["Enums"]["tier_type"] | null
+          trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1162,6 +1168,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_free_trial: {
+        Args: never
+        Returns: {
+          created_at: string | null
+          daily_send_limit: number | null
+          email_credits: number | null
+          emails_sent_this_hour: number | null
+          emails_sent_today: number | null
+          hourly_send_limit: number | null
+          id: string
+          is_approved: boolean | null
+          last_daily_reset: string | null
+          last_hourly_reset: string | null
+          organization_name: string | null
+          smtp_encryption: string | null
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_username: string | null
+          tier: Database["public"]["Enums"]["tier_type"] | null
+          trial_ends_at: string | null
+          trial_started_at: string | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_integration_token: {
         Args: { _name: string; _token_hash: string }
         Returns: string
