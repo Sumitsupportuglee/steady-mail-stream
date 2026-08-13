@@ -388,7 +388,10 @@ export default function Landing() {
           <div className="mb-10 rounded-xl border border-border bg-card p-8">
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
-                <span className="bg-primary/10 text-primary font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Monthly Subscription</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-primary/10 text-primary font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">Monthly Subscription</span>
+                  <span className="bg-green-500/10 text-green-600 font-mono text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">14-day free trial</span>
+                </div>
                 <h3 className="mt-3 font-mono text-xl font-semibold">Premium access, billed monthly</h3>
                 <div className="mt-3">
                   <span className="font-mono text-4xl font-bold">{isIndian ? '₹3,499' : '$49'}</span>
