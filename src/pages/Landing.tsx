@@ -110,6 +110,30 @@ export default function Landing() {
         </div>
       </nav>
 
+      {/* Free trial flash banner */}
+      <div className="relative overflow-hidden bg-primary text-primary-foreground">
+        <div className="absolute inset-0 ops-grid opacity-10" />
+        <div className="relative mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-6 py-3.5 sm:flex-row">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-foreground opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary-foreground" />
+            </span>
+            <p className="font-mono text-sm font-semibold tracking-tight">
+              Try senddot premium free for 14 days — no payment required.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-8 px-4 font-mono text-xs font-semibold uppercase tracking-wider"
+            asChild
+          >
+            <Link to="/auth">Start free trial</Link>
+          </Button>
+        </div>
+      </div>
+
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-border">
         <div className="absolute inset-0 ops-grid opacity-25 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
