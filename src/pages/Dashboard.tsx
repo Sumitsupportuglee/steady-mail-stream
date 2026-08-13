@@ -168,7 +168,7 @@ export default function Dashboard() {
         )}
 
         {/* Subscription Status */}
-        {!isPilotAccount && isActive && (
+        {!isPilotAccount && !isTrial && isActive && (
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
