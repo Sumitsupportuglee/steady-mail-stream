@@ -43,7 +43,7 @@ interface RecentCampaign {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { isActive, subscription, daysRemaining, isPilotAccount, planLimits, loading: subLoading } = useSubscription();
+  const { isActive, subscription, daysRemaining, isPilotAccount, planLimits, loading: subLoading, isTrial, trialDaysRemaining, trialEndsAt, trialClaimed, canClaimTrial, claiming, claimTrial } = useSubscription();
   const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
