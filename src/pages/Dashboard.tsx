@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription } from '@/hooks/useSubscription';
+import { useSubscription, TRIAL_DAYS } from '@/hooks/useSubscription';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ interface RecentCampaign {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { isActive, subscription, daysRemaining, isPilotAccount, planLimits, loading: subLoading } = useSubscription();
+  const { isActive, subscription, daysRemaining, isPilotAccount, planLimits, loading: subLoading, isTrial, trialDaysRemaining, trialEndsAt, trialClaimed, canClaimTrial, claiming, claimTrial } = useSubscription();
   const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +168,7 @@ export default function Dashboard() {
         )}
 
         {/* Subscription Status */}
-        {!isPilotAccount && isActive && (
+        {!isPilotAccount && !isTrial && isActive && (
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -193,25 +193,61 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
-        
+        {/* Free Trial Status */}
+        {isTrial && (
+          <Card className="bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border-emerald-500/30">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <Crown className="h-5 w-5 text-emerald-600" />
+                  <div>
+                    <p className="font-semibold">14-Day Free Trial — Premium Access</p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {trialDaysRemaining} {trialDaysRemaining === 1 ? 'day' : 'days'} remaining
+                      {trialEndsAt && <span> · Ends {new Date(trialEndsAt).toLocaleDateString()}</span>}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/pricing">Subscribe</Link>
+                </Button>
+              </div>
+              <Progress value={Math.max(0, (trialDaysRemaining / TRIAL_DAYS) * 100)} className="h-2" />
+            </CardContent>
+          </Card>
+        )}
+
         {!isActive && (
           <Card className="border-destructive/30 bg-destructive/5">
             <CardContent className="flex items-center justify-between p-5">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
                 <div>
-                  <p className="font-semibold">No Active Subscription</p>
+                  <p className="font-semibold">
+                    {canClaimTrial ? 'Start your 14-day free trial' : trialClaimed ? 'Free trial ended' : 'No Active Subscription'}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    Subscribe to unlock lead generation and email campaigns
+                    {canClaimTrial
+                      ? 'Get full premium access for 14 days — no payment required'
+                      : 'Subscribe to unlock lead generation and email campaigns'}
                   </p>
                 </div>
               </div>
-              <Button asChild>
-                <Link to="/pricing">Subscribe Now</Link>
-              </Button>
+              {canClaimTrial ? (
+                <Button onClick={() => claimTrial()} disabled={claiming}>
+                  {claiming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Claim Free Trial
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link to="/pricing">Subscribe Now</Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
+
 
         {/* Email Account Warmup Status */}
         <WarmupStatus />
