@@ -11,6 +11,10 @@ import { Progress } from '@/components/ui/progress';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { WarmupStatus } from '@/components/dashboard/WarmupStatus';
 import { SenderHealthOverview } from '@/components/dashboard/SenderHealthOverview';
+import { MetricTile } from '@/components/ops/MetricTile';
+import { DonutGauge } from '@/components/ops/DonutGauge';
+import { VolumeChart } from '@/components/ops/VolumeChart';
+import { useSendingTimeline } from '@/hooks/useSendingTimeline';
 import { 
   Crown,
   Mail, 
