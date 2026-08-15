@@ -257,34 +257,118 @@ export default function CRM() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">CRM Pipeline</h1>
-          <p className="text-muted-foreground mt-1">
-            Real-time campaign engagement metrics
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Engagement Operations
+            </p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">CRM Pipeline</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Real-time campaign engagement, funnel conversion and opt-out signals
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">
+            <span className="h-2 w-2 rounded-full animate-pulse" style={{ background: 'hsl(var(--success))' }} />
+            <span className="text-muted-foreground">Live · realtime stream connected</span>
+          </div>
         </div>
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* Metric Tiles */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {CARDS.map((card) => (
-            <Card key={card.title} className={`border ${card.borderColor}`}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {card.title}
-                </CardTitle>
-                <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${card.color}`}>
-                  {card.value.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
-              </CardContent>
-            </Card>
+            <MetricTile
+              key={card.title}
+              label={card.title}
+              value={card.value.toLocaleString()}
+              sub={card.description}
+              icon={card.icon}
+              accent={card.accent}
+            />
           ))}
+          <MetricTile
+            label="Opt-out Rate"
+            value={`${unsubRate}%`}
+            sub="Share of delivered emails"
+            icon={UserMinus}
+            accent="hsl(var(--warning))"
+          />
         </div>
+
+        {/* Funnel + Engagement Timeline */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Conversion Funnel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {FUNNEL.map((step) => {
+                const pct = stats.delivered > 0 ? (step.value / stats.delivered) * 100 : 0;
+                return (
+                  <div key={step.label}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{step.label}</span>
+                      <span className="font-semibold tabular-nums">
+                        {step.value.toLocaleString()}
+                        <span className="ml-2 text-muted-foreground">{pct.toFixed(1)}%</span>
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, pct)}%`, background: step.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="grid grid-cols-2 gap-2 border-t pt-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Open rate</p>
+                  <p className="font-semibold tabular-nums">{openRate}%</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Click rate</p>
+                  <p className="font-semibold tabular-nums">{clickRate}%</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Clicks / opener</p>
+                  <p className="font-semibold tabular-nums">{clicksPerOpener}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Engaged contacts</p>
+                  <p className="font-semibold tabular-nums">{engagedContacts.toLocaleString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Engagement Timeline · 30 days
+                </CardTitle>
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'hsl(var(--primary))' }} /> Sent
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--success))' }} /> Open rate
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--info))' }} /> Click rate
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <VolumeChart points={timeline.points} height={230} />
+            </CardContent>
+          </Card>
+        </div>
+
 
         {/* Live Activity Feeds */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
