@@ -49,6 +49,7 @@ export default function CRM() {
   const [clickFeed, setClickFeed] = useState<ClickEvent[]>([]);
   const [unsubFeed, setUnsubFeed] = useState<UnsubEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const timeline = useSendingTimeline(user?.id);
 
   const fetchStats = useCallback(async () => {
     if (!user) return;
