@@ -6,6 +6,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink, UserMinus } from 'lucide-react';
+import { MetricTile } from '@/components/ops/MetricTile';
+import { VolumeChart } from '@/components/ops/VolumeChart';
+import { useSendingTimeline } from '@/hooks/useSendingTimeline';
 
 interface CampaignStats {
   contacted: number;
@@ -46,6 +49,7 @@ export default function CRM() {
   const [clickFeed, setClickFeed] = useState<ClickEvent[]>([]);
   const [unsubFeed, setUnsubFeed] = useState<UnsubEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const timeline = useSendingTimeline(user?.id);
 
   const fetchStats = useCallback(async () => {
     if (!user) return;
@@ -190,24 +194,29 @@ export default function CRM() {
 
   const openRate = stats.delivered > 0 ? ((stats.totalOpens / stats.delivered) * 100).toFixed(1) : '0.0';
   const clickRate = stats.delivered > 0 ? ((stats.totalClicks / stats.delivered) * 100).toFixed(1) : '0.0';
+  const unsubRate = stats.delivered > 0 ? ((stats.unsubscribed / stats.delivered) * 100).toFixed(1) : '0.0';
+  const clicksPerOpener = stats.opened > 0 ? (stats.totalClicks / stats.opened).toFixed(2) : '0.00';
+  const engagedContacts = new Set([...stats.openedEmails, ...stats.clickedEmails]).size;
 
   const CARDS = [
     {
       title: 'Contacted',
-      description: 'Personas whom emails were sent',
+      description: 'Unique recipients reached',
       value: stats.contacted,
       icon: Send,
       color: 'text-blue-500',
+      accent: 'hsl(var(--primary))',
       bgColor: 'bg-blue-500/10',
       borderColor: 'border-blue-500/20',
       items: stats.contactedEmails,
     },
     {
       title: 'Delivered',
-      description: 'Emails delivered to mailbox',
+      description: 'Accepted by receiving mailbox',
       value: stats.delivered,
       icon: CheckCircle,
       color: 'text-green-500',
+      accent: 'hsl(var(--success))',
       bgColor: 'bg-green-500/10',
       borderColor: 'border-green-500/20',
       items: null,
@@ -218,6 +227,7 @@ export default function CRM() {
       value: stats.opened,
       icon: MailOpen,
       color: 'text-amber-500',
+      accent: 'hsl(var(--warning))',
       bgColor: 'bg-amber-500/10',
       borderColor: 'border-amber-500/20',
       items: stats.openedEmails,
@@ -228,21 +238,31 @@ export default function CRM() {
       value: stats.clicked,
       icon: MousePointerClick,
       color: 'text-purple-500',
+      accent: 'hsl(var(--info))',
       bgColor: 'bg-purple-500/10',
       borderColor: 'border-purple-500/20',
       items: stats.clickedEmails,
     },
     {
       title: 'Unsubscribed',
-      description: 'Recipients who opted out — never contacted again',
+      description: 'Opted out — suppressed permanently',
       value: stats.unsubscribed,
       icon: UserMinus,
       color: 'text-red-500',
+      accent: 'hsl(var(--destructive))',
       bgColor: 'bg-red-500/10',
       borderColor: 'border-red-500/20',
       items: stats.unsubscribedEmails,
     },
   ];
+
+  const FUNNEL = [
+    { label: 'Delivered', value: stats.delivered, color: 'hsl(var(--success))' },
+    { label: 'Opened (unique)', value: stats.opened, color: 'hsl(var(--warning))' },
+    { label: 'Clicked (unique)', value: stats.clicked, color: 'hsl(var(--info))' },
+    { label: 'Unsubscribed', value: stats.unsubscribed, color: 'hsl(var(--destructive))' },
+  ];
+
 
   if (loading) {
     return (
@@ -257,34 +277,118 @@ export default function CRM() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">CRM Pipeline</h1>
-          <p className="text-muted-foreground mt-1">
-            Real-time campaign engagement metrics
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Engagement Operations
+            </p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">CRM Pipeline</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Real-time campaign engagement, funnel conversion and opt-out signals
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">
+            <span className="h-2 w-2 rounded-full animate-pulse" style={{ background: 'hsl(var(--success))' }} />
+            <span className="text-muted-foreground">Live · realtime stream connected</span>
+          </div>
         </div>
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* Metric Tiles */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {CARDS.map((card) => (
-            <Card key={card.title} className={`border ${card.borderColor}`}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {card.title}
-                </CardTitle>
-                <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${card.color}`}>
-                  {card.value.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
-              </CardContent>
-            </Card>
+            <MetricTile
+              key={card.title}
+              label={card.title}
+              value={card.value.toLocaleString()}
+              sub={card.description}
+              icon={card.icon}
+              accent={card.accent}
+            />
           ))}
+          <MetricTile
+            label="Opt-out Rate"
+            value={`${unsubRate}%`}
+            sub="Share of delivered emails"
+            icon={UserMinus}
+            accent="hsl(var(--warning))"
+          />
         </div>
+
+        {/* Funnel + Engagement Timeline */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Conversion Funnel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {FUNNEL.map((step) => {
+                const pct = stats.delivered > 0 ? (step.value / stats.delivered) * 100 : 0;
+                return (
+                  <div key={step.label}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{step.label}</span>
+                      <span className="font-semibold tabular-nums">
+                        {step.value.toLocaleString()}
+                        <span className="ml-2 text-muted-foreground">{pct.toFixed(1)}%</span>
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, pct)}%`, background: step.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="grid grid-cols-2 gap-2 border-t pt-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Open rate</p>
+                  <p className="font-semibold tabular-nums">{openRate}%</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Click rate</p>
+                  <p className="font-semibold tabular-nums">{clickRate}%</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Clicks / opener</p>
+                  <p className="font-semibold tabular-nums">{clicksPerOpener}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Engaged contacts</p>
+                  <p className="font-semibold tabular-nums">{engagedContacts.toLocaleString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Engagement Timeline · 30 days
+                </CardTitle>
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'hsl(var(--primary))' }} /> Sent
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--success))' }} /> Open rate
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--info))' }} /> Click rate
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <VolumeChart points={timeline.points} height={230} />
+            </CardContent>
+          </Card>
+        </div>
+
 
         {/* Live Activity Feeds */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -11,6 +11,10 @@ import { Progress } from '@/components/ui/progress';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { WarmupStatus } from '@/components/dashboard/WarmupStatus';
 import { SenderHealthOverview } from '@/components/dashboard/SenderHealthOverview';
+import { MetricTile } from '@/components/ops/MetricTile';
+import { DonutGauge } from '@/components/ops/DonutGauge';
+import { VolumeChart } from '@/components/ops/VolumeChart';
+import { useSendingTimeline } from '@/hooks/useSendingTimeline';
 import { 
   Crown,
   Mail, 
@@ -47,6 +51,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const timeline = useSendingTimeline(user?.id);
 
   useEffect(() => {
     if (user) fetchDashboardData();
@@ -120,6 +125,25 @@ export default function Dashboard() {
   const totalDays = isYearly ? 365 : 30;
   const progressPercent = isActive ? Math.max(0, (daysRemaining / totalDays) * 100) : 0;
   const planLabel = subscription?.plan?.startsWith('business') ? 'Business' : 'Starter';
+
+  // Presentational aggregates for the ops console (read-only)
+  const sentSeries = timeline.points.map(p => p.sent);
+  const failSeries = timeline.points.map(p => p.failed);
+  const openSeries = timeline.points.map(p => p.opens);
+  const clickSeries = timeline.points.map(p => p.clicks);
+  const attempts = timeline.totals.sent + timeline.totals.failed;
+  const deliveryRate = attempts > 0 ? Math.round((timeline.totals.sent / attempts) * 100) : 0;
+  const failureRate = attempts > 0 ? Math.round((timeline.totals.failed / attempts) * 1000) / 10 : 0;
+  const peakDay = timeline.points.reduce(
+    (best, p) => (p.sent > best.sent ? { sent: p.sent, label: p.label } : best),
+    { sent: 0, label: '—' },
+  );
+  const dailyAvg = timeline.points.length
+    ? Math.round(timeline.totals.sent / timeline.points.length)
+    : 0;
+  const lastWeek = sentSeries.slice(-7).reduce((a, b) => a + b, 0);
+  const prevWeek = sentSeries.slice(-14, -7).reduce((a, b) => a + b, 0);
+  const sentDelta = prevWeek > 0 ? Math.round(((lastWeek - prevWeek) / prevWeek) * 100) : null;
 
   return (
     <AppLayout>
@@ -255,49 +279,136 @@ export default function Dashboard() {
         {/* Sender Health (Deliverability + Risk per SMTP) */}
         <SenderHealthOverview />
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Emails Sent</CardTitle>
-              <Mail className="h-4 w-4 text-muted-foreground" />
+        {/* Outbound Volume & Health Console */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2 overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Send Volume · 30 days
+                  </CardTitle>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-2xl font-bold tabular-nums">
+                      {timeline.totals.sent.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground">emails delivered to MTA</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'hsl(var(--primary))' }} /> Sent
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'hsl(var(--destructive))' }} /> Failed
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--success))' }} /> Open rate
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-3.5" style={{ background: 'hsl(var(--info))' }} /> Click rate
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.emailsSent.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
+            <CardContent className="pt-0">
+              <VolumeChart points={timeline.points} />
             </CardContent>
           </Card>
+
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Open Rate</CardTitle>
-              <Eye className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Pipeline Health
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Delivery outcome mix across the last 30 days
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{stats.openRate}%</div>
-              <p className="text-xs text-muted-foreground mt-1">Average open rate</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Reply Rate</CardTitle>
-              <MessageSquareReply className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.replyRate}%</div>
-              <p className="text-xs text-muted-foreground mt-1">Coming soon</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.conversionRate}%</div>
-              <p className="text-xs text-muted-foreground mt-1">Based on link clicks</p>
+              <DonutGauge
+                size={132}
+                centerValue={`${deliveryRate}%`}
+                centerLabel="delivered"
+                segments={[
+                  { label: 'Sent', value: timeline.totals.sent, color: 'hsl(var(--primary))' },
+                  { label: 'Pending', value: timeline.totals.pending, color: 'hsl(var(--warning))' },
+                  { label: 'Failed', value: timeline.totals.failed, color: 'hsl(var(--destructive))' },
+                ]}
+              />
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t pt-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Total opens</p>
+                  <p className="font-semibold tabular-nums">{timeline.totals.opens.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Total clicks</p>
+                  <p className="font-semibold tabular-nums">{timeline.totals.clicks.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Peak day</p>
+                  <p className="font-semibold tabular-nums">{peakDay.sent.toLocaleString()} · {peakDay.label}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Daily avg</p>
+                  <p className="font-semibold tabular-nums">{dailyAvg.toLocaleString()}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Stats Grid */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <MetricTile
+            label="Emails Sent"
+            value={stats.emailsSent.toLocaleString()}
+            sub="Last 30 days"
+            icon={Mail}
+            accent="hsl(var(--primary))"
+            series={sentSeries}
+            delta={sentDelta}
+          />
+          <MetricTile
+            label="Open Rate"
+            value={`${stats.openRate}%`}
+            sub={`${timeline.totals.opens.toLocaleString()} opens tracked`}
+            icon={Eye}
+            accent="hsl(var(--success))"
+            series={openSeries}
+          />
+          <MetricTile
+            label="Conversion"
+            value={`${stats.conversionRate}%`}
+            sub={`${timeline.totals.clicks.toLocaleString()} link clicks`}
+            icon={TrendingUp}
+            accent="hsl(var(--info))"
+            series={clickSeries}
+          />
+          <MetricTile
+            label="Reply Rate"
+            value={`${stats.replyRate}%`}
+            sub="Tracking coming soon"
+            icon={MessageSquareReply}
+            accent="hsl(var(--accent))"
+          />
+          <MetricTile
+            label="Bounce / Failed"
+            value={timeline.totals.failed.toLocaleString()}
+            sub={`${failureRate}% of attempts`}
+            icon={AlertTriangle}
+            accent="hsl(var(--destructive))"
+            series={failSeries}
+          />
+          <MetricTile
+            label="In Queue"
+            value={timeline.totals.pending.toLocaleString()}
+            sub="Scheduled / awaiting rotation"
+            icon={Send}
+            accent="hsl(var(--warning))"
+          />
+        </div>
+
 
         {/* Recent Campaigns */}
         <Card>
