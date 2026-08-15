@@ -190,24 +190,29 @@ export default function CRM() {
 
   const openRate = stats.delivered > 0 ? ((stats.totalOpens / stats.delivered) * 100).toFixed(1) : '0.0';
   const clickRate = stats.delivered > 0 ? ((stats.totalClicks / stats.delivered) * 100).toFixed(1) : '0.0';
+  const unsubRate = stats.delivered > 0 ? ((stats.unsubscribed / stats.delivered) * 100).toFixed(1) : '0.0';
+  const clicksPerOpener = stats.opened > 0 ? (stats.totalClicks / stats.opened).toFixed(2) : '0.00';
+  const engagedContacts = new Set([...stats.openedEmails, ...stats.clickedEmails]).size;
 
   const CARDS = [
     {
       title: 'Contacted',
-      description: 'Personas whom emails were sent',
+      description: 'Unique recipients reached',
       value: stats.contacted,
       icon: Send,
       color: 'text-blue-500',
+      accent: 'hsl(var(--primary))',
       bgColor: 'bg-blue-500/10',
       borderColor: 'border-blue-500/20',
       items: stats.contactedEmails,
     },
     {
       title: 'Delivered',
-      description: 'Emails delivered to mailbox',
+      description: 'Accepted by receiving mailbox',
       value: stats.delivered,
       icon: CheckCircle,
       color: 'text-green-500',
+      accent: 'hsl(var(--success))',
       bgColor: 'bg-green-500/10',
       borderColor: 'border-green-500/20',
       items: null,
@@ -218,6 +223,7 @@ export default function CRM() {
       value: stats.opened,
       icon: MailOpen,
       color: 'text-amber-500',
+      accent: 'hsl(var(--warning))',
       bgColor: 'bg-amber-500/10',
       borderColor: 'border-amber-500/20',
       items: stats.openedEmails,
@@ -228,21 +234,31 @@ export default function CRM() {
       value: stats.clicked,
       icon: MousePointerClick,
       color: 'text-purple-500',
+      accent: 'hsl(var(--info))',
       bgColor: 'bg-purple-500/10',
       borderColor: 'border-purple-500/20',
       items: stats.clickedEmails,
     },
     {
       title: 'Unsubscribed',
-      description: 'Recipients who opted out — never contacted again',
+      description: 'Opted out — suppressed permanently',
       value: stats.unsubscribed,
       icon: UserMinus,
       color: 'text-red-500',
+      accent: 'hsl(var(--destructive))',
       bgColor: 'bg-red-500/10',
       borderColor: 'border-red-500/20',
       items: stats.unsubscribedEmails,
     },
   ];
+
+  const FUNNEL = [
+    { label: 'Delivered', value: stats.delivered, color: 'hsl(var(--success))' },
+    { label: 'Opened (unique)', value: stats.opened, color: 'hsl(var(--warning))' },
+    { label: 'Clicked (unique)', value: stats.clicked, color: 'hsl(var(--info))' },
+    { label: 'Unsubscribed', value: stats.unsubscribed, color: 'hsl(var(--destructive))' },
+  ];
+
 
   if (loading) {
     return (
