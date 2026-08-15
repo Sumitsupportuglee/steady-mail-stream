@@ -125,6 +125,25 @@ export default function Dashboard() {
   const progressPercent = isActive ? Math.max(0, (daysRemaining / totalDays) * 100) : 0;
   const planLabel = subscription?.plan?.startsWith('business') ? 'Business' : 'Starter';
 
+  // Presentational aggregates for the ops console (read-only)
+  const sentSeries = timeline.points.map(p => p.sent);
+  const failSeries = timeline.points.map(p => p.failed);
+  const openSeries = timeline.points.map(p => p.opens);
+  const clickSeries = timeline.points.map(p => p.clicks);
+  const attempts = timeline.totals.sent + timeline.totals.failed;
+  const deliveryRate = attempts > 0 ? Math.round((timeline.totals.sent / attempts) * 100) : 0;
+  const failureRate = attempts > 0 ? Math.round((timeline.totals.failed / attempts) * 1000) / 10 : 0;
+  const peakDay = timeline.points.reduce(
+    (best, p) => (p.sent > best.sent ? { sent: p.sent, label: p.label } : best),
+    { sent: 0, label: '—' },
+  );
+  const dailyAvg = timeline.points.length
+    ? Math.round(timeline.totals.sent / timeline.points.length)
+    : 0;
+  const lastWeek = sentSeries.slice(-7).reduce((a, b) => a + b, 0);
+  const prevWeek = sentSeries.slice(-14, -7).reduce((a, b) => a + b, 0);
+  const sentDelta = prevWeek > 0 ? Math.round(((lastWeek - prevWeek) / prevWeek) * 100) : null;
+
   return (
     <AppLayout>
       <div className="space-y-6">
