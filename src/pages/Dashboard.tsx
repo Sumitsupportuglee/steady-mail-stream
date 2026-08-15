@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({ emailsSent: 0, openRate: 0, replyRate: 0, conversionRate: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<RecentCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const timeline = useSendingTimeline(user?.id);
 
   useEffect(() => {
     if (user) fetchDashboardData();
