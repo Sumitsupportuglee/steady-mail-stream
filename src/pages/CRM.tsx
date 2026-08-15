@@ -6,6 +6,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Send, MailOpen, CheckCircle, MousePointerClick, ExternalLink, UserMinus } from 'lucide-react';
+import { MetricTile } from '@/components/ops/MetricTile';
+import { VolumeChart } from '@/components/ops/VolumeChart';
+import { useSendingTimeline } from '@/hooks/useSendingTimeline';
 
 interface CampaignStats {
   contacted: number;
