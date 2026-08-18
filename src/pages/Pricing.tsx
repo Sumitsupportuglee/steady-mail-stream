@@ -7,11 +7,10 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { CheckCircle2, Crown, Loader2, Zap, Rocket } from 'lucide-react';
+import { CheckCircle2, Crown, Loader2, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PLANS, type PlanConfig } from '@/config/plans';
+import { PLANS } from '@/config/plans';
 
 const PAYPAL_PAYMENT_LINK = 'https://www.paypal.com/ncp/payment/2KQ4JZNT2E8P2';
 
@@ -21,14 +20,15 @@ declare global {
   }
 }
 
-
 export default function Pricing() {
   const { user } = useAuth();
-  const { isActive, subscription, daysRemaining } = useSubscription();
+  const { isActive, daysRemaining } = useSubscription();
   const isIndian = useIsIndianUser();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Single, consistent subscription plan across the platform
+  const plan = PLANS[0];
 
   if (isIndian === null) {
     return (
@@ -40,19 +40,9 @@ export default function Pricing() {
     );
   }
 
-  const formatPrice = (plan: PlanConfig) => {
-    const prices = isIndian ? plan.pricing.inr : plan.pricing.usd;
-    const price = billingCycle === 'monthly' ? prices.monthly : prices.yearly;
-    const currency = isIndian ? '₹' : '$';
-    return `${currency}${price.toLocaleString()}`;
-  };
-
-  const getSavings = (plan: PlanConfig) => {
-    const prices = isIndian ? plan.pricing.inr : plan.pricing.usd;
-    const savings = (prices.monthly * 12) - prices.yearly;
-    const currency = isIndian ? '₹' : '$';
-    return savings > 0 ? `Save ${currency}${savings.toLocaleString()}` : null;
-  };
+  const priceLabel = isIndian
+    ? `₹${plan.pricing.inr.monthly.toLocaleString('en-IN')}`
+    : `$${plan.pricing.usd.monthly.toLocaleString()}`;
 
   const loadRazorpayScript = (): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -68,7 +58,7 @@ export default function Pricing() {
     });
   };
 
-  const handleSubscribe = async (planId: 'starter' | 'business') => {
+  const handleSubscribe = async () => {
     if (!user) {
       navigate('/auth');
       return;
@@ -84,7 +74,7 @@ export default function Pricing() {
       return;
     }
 
-    const fullPlanId = `${planId}_${billingCycle}`;
+    const fullPlanId = 'starter_monthly';
     setLoadingPlan(fullPlanId);
 
     try {
@@ -97,15 +87,12 @@ export default function Pricing() {
 
       if (error) throw error;
 
-
-      const planConfig = PLANS.find(p => p.id === planId)!;
-
       const options = {
         key: data.key_id,
         amount: data.amount,
         currency: data.currency,
         name: 'Senddot',
-        description: `${planConfig.name} ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} Subscription`,
+        description: `${plan.name} — Monthly`,
         order_id: data.order_id,
         handler: async (response: any) => {
           try {
@@ -122,7 +109,7 @@ export default function Pricing() {
 
             toast({
               title: '🎉 Subscription Activated!',
-              description: `Your ${planConfig.name} ${billingCycle} plan is now active!`,
+              description: `Your ${plan.name} is now active!`,
             });
 
             navigate('/dashboard');
@@ -152,21 +139,13 @@ export default function Pricing() {
     }
   };
 
-  const getCurrentPlanTier = () => {
-    if (!subscription?.plan) return null;
-    if (subscription.plan.startsWith('business')) return 'business';
-    return 'starter';
-  };
-
-  const currentTier = getCurrentPlanTier();
-
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-2xl mx-auto space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Choose Your Plan</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Monthly Subscription</h1>
           <p className="text-muted-foreground mt-2">
-            Unlock lead generation, bulk email campaigns, and powerful analytics
+            One simple plan — full premium access to lead generation, bulk campaigns, and analytics
           </p>
         </div>
 
@@ -176,12 +155,8 @@ export default function Pricing() {
               <div className="flex items-center gap-3">
                 <Crown className="h-5 w-5 text-primary" />
                 <div>
-                  <p className="font-medium">
-                    Active {currentTier === 'business' ? 'Business' : 'Starter'} Plan
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {daysRemaining} days remaining
-                  </p>
+                  <p className="font-medium">Active subscription</p>
+                  <p className="text-sm text-muted-foreground">{daysRemaining} days remaining</p>
                 </div>
               </div>
               <Badge variant="default">Active</Badge>
@@ -189,85 +164,53 @@ export default function Pricing() {
           </Card>
         )}
 
-        {/* Billing Toggle */}
-        <div className="flex justify-center">
-          <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as 'monthly' | 'yearly')}>
-            <TabsList>
-              <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              <TabsTrigger value="yearly" className="gap-1">
-                Yearly <Badge variant="secondary" className="text-xs ml-1">Save more</Badge>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+        <Card className="relative border-primary/50 shadow-md transition-shadow hover:shadow-lg">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <Badge className="bg-primary text-primary-foreground px-3 py-1">
+              <Rocket className="mr-1 h-3 w-3" />
+              14-day free trial
+            </Badge>
+          </div>
+          <CardHeader className="text-center pt-8">
+            <CardTitle className="text-xl">{plan.name}</CardTitle>
+            <CardDescription>{plan.description}</CardDescription>
+            <div className="mt-4">
+              <span className="text-4xl font-bold">{priceLabel}</span>
+              <span className="text-muted-foreground">/month</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isIndian ? 'Secure payment via Razorpay' : 'Secure payment via PayPal'} · cancel anytime
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <ul className="space-y-3">
+              {plan.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <Button
+              className="w-full"
+              disabled={isActive || !!loadingPlan}
+              onClick={handleSubscribe}
+            >
+              {loadingPlan ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+              ) : isActive ? (
+                'Current Plan'
+              ) : (
+                'Subscribe Now'
+              )}
+            </Button>
+          </CardContent>
+        </Card>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {PLANS.map((plan) => {
-            const isCurrent = isActive && currentTier === plan.id;
-            const fullPlanId = `${plan.id}_${billingCycle}`;
-            const savings = billingCycle === 'yearly' ? getSavings(plan) : null;
-
-            return (
-              <Card
-                key={plan.id}
-                className={`relative transition-shadow hover:shadow-lg ${
-                  plan.id === 'business' ? 'border-primary/50 shadow-md' : ''
-                }`}
-              >
-                {plan.id === 'business' && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground px-3 py-1">
-                      <Rocket className="mr-1 h-3 w-3" />
-                      Most Popular
-                    </Badge>
-                  </div>
-                )}
-                {savings && (
-                  <div className="absolute -top-3 right-4">
-                    <Badge className="bg-green-600 text-white px-2 py-0.5 text-xs">
-                      <Zap className="mr-1 h-3 w-3" />
-                      {savings}
-                    </Badge>
-                  </div>
-                )}
-                <CardHeader className="text-center pt-8">
-                  <CardTitle className="text-xl">{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold">{formatPrice(plan)}</span>
-                    <span className="text-muted-foreground">/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <ul className="space-y-3">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    className="w-full"
-                    variant={plan.id === 'business' ? 'default' : 'outline'}
-                    disabled={isCurrent || !!loadingPlan}
-                    onClick={() => handleSubscribe(plan.id)}
-                  >
-                    {loadingPlan === fullPlanId ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-                    ) : isCurrent ? (
-                      'Current Plan'
-                    ) : isActive && currentTier === 'starter' && plan.id === 'business' ? (
-                      'Upgrade to Business'
-                    ) : (
-                      'Subscribe Now'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <p className="text-center text-sm text-muted-foreground">
+          Looking to own the platform outright? See deployment pricing on the{' '}
+          <button className="underline" onClick={() => navigate('/')}>home page</button>.
+        </p>
       </div>
     </AppLayout>
   );
