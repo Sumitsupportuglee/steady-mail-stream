@@ -1,22 +1,45 @@
-# Fix: login not working
+# Tech-stack & code-structure deck (PowerPoint)
 
-## What's wrong
+## Goal
+An editable `.pptx` file (`senddot_tech_stack.pptx`) giving a buyer or new developer a clear picture of the platform's technology stack and code structure. ~10 slides, 16:9.
 
-Login isn't failing because of a bug in your app. Your hosted database and login service are currently **paused**, so every request from the app — sign-in, reviews, updates on the home page — fails with a connection error.
+## Slides
 
-Evidence:
-- The sign-in request to the login service returned a network error, not a "wrong password" message.
-- Two data requests from the landing page (reviews, updates) failed the same way.
-- A backend health check reports the hosted database as paused.
+1. **Cover** — "Senddot — Technology Stack & Architecture" dark slide, platform tagline.
+2. **Stack at a glance** — four-column overview: Frontend / Backend / Serverless / Integrations.
+3. **Frontend** — React 18, TypeScript 5, Vite 5, Tailwind CSS v3, shadcn/ui (Radix), React Router 6, TanStack Query, React Hook Form + Zod, TipTap rich-text editor, Recharts, PapaParse (CSV), Lucide icons, date-fns.
+4. **Backend (Lovable Cloud)** — Managed Supabase: PostgreSQL database, Row-Level Security for per-agency data isolation, email/password auth, storage, analytics logs, pg_cron scheduler (queue runs every minute).
+5. **Serverless edge functions** — 13 Deno functions grouped by purpose:
+   - Sending engine: process-queue (SMTP rotation, custom TCP/TLS SMTP client)
+   - Tracking: track-open (1x1 pixel), track-click (link rewrite)
+   - Lead gen: scrape-leads (Firecrawl), generate-outreach + ai-write-email (Lovable AI)
+   - Money/ops: razorpay (orders + HMAC verification), trigger-webhook, zapier-inbound
+   - Compliance: unsubscribe, verify-domain, manage-smtp, manage-ses-identity
+6. **Integrations & payments** — Razorpay (India), PayPal link (international), Firecrawl, ElevenLabs chat widget, AWS SES, custom SMTP accounts.
+7. **Sending architecture diagram** — ASCII-style flow drawn with shapes: Campaign wizard → email queue → per-minute cron worker → rotation pool (12 SMTP accounts) → open/click tracking → CRM updates.
+8. **Code structure** — real folder map from the repo:
+   ```text
+   src/
+     pages/          24 routes (Dashboard, CRM, Campaigns, admin/, ...)
+     components/     auth, dashboard, editor, email, landing, layout, ops, ui
+     hooks/          useSubscription, useAdminCheck, useSendingTimeline, ...
+     contexts/       AuthContext, ClientContext
+     integrations/   supabase client (auto-generated)
+   supabase/
+     functions/      13 Deno edge functions
+     migrations/     36 SQL migrations, RLS + triggers
+   ```
+9. **Security & data isolation** — RLS on every table, role table with has_role() security-definer checks, per-client workspace isolation, no client-side role checks.
+10. **Closing** — what this stack means for an owner: zero servers to run, self-hostable, scales with managed infrastructure; contact details.
 
-## The fix
+## Design
+- Charcoal Minimal palette: charcoal `36454F` dominant, off-white `F2F2F2` content slides, one terracotta accent `B85042`.
+- Fonts: Arial Black titles, Calibri body; mono (Consolas) for the code-structure slide.
+- Visual motif: small rounded squares with numbers/icons per section; every slide has a shape/diagram element, no plain bullet slides.
+- 0.5" margins, 40pt+ titles, 20-24pt body.
 
-1. Resume the paused backend.
-2. Wait until it reports healthy (starting up takes a minute or two).
-3. Re-test sign-in with your admin account and confirm the landing page data loads again.
-
-No code changes are needed. If sign-in still fails after the backend is healthy, the next step is to check the login logs for a real credential error and report back.
-
-## Notes
-
-Free/idle backends can pause automatically after a period of inactivity. If this keeps happening, we can discuss keeping it warm or upgrading.
+## Technical notes
+- Generate with pptxgenjs from `/tmp`, save to `/mnt/documents/senddot_tech_stack.pptx`.
+- Validate with the PPTX skill (schema validation + auto-repair, markitdown text check), render slides to images and visually inspect at least one fix-and-verify cycle.
+- Content is drawn only from the actual repo (package.json, supabase/functions, src layout) — no invented claims.
+- No changes to any app code or database. (Note: the earlier login issue is separate — the hosted database is still paused and needs resuming whenever you want to sign in.)
